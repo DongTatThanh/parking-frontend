@@ -9,7 +9,7 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
 
@@ -40,6 +40,8 @@ const ProgressBar: React.FC<{ progress: number, color: string }> = ({ progress, 
 
 const BookingScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+  const { bookingDate, startTime, endTime } = route.params || {};
   
   // Get today's date
   const today = new Date();
@@ -67,21 +69,24 @@ const BookingScreen: React.FC = () => {
         </View>
         
         <View style={styles.content}>
+          
           {/* Date selection */}
           <View style={styles.dateSelectionCard}>
             <Text style={styles.sectionTitle}>Chọn ngày</Text>
             
             <View style={styles.formGroup}>
               <Text style={styles.label}>Ngày đặt chỗ</Text>
-              <TouchableOpacity style={styles.dateInput}>
-                <Text>{selectedDate}</Text>
+              <TouchableOpacity onPress={() => navigation.navigate("ChooseTime")} style={styles.dateInput}>
+                <Text>{bookingDate}</Text>
               </TouchableOpacity>
             </View>
             
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Giờ đặt chỗ</Text>
-              <TouchableOpacity style={styles.dateInput}>
-                <Text>08:00</Text>
+              <Text style={styles.label }>Giờ đặt chỗ</Text>
+              <TouchableOpacity onPress={() => navigation.navigate("ChooseTime")} style={styles.dateInput}  
+              
+              >
+                <Text>{startTime} - {endTime}</Text>
               </TouchableOpacity>
             </View>
           </View>

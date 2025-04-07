@@ -20,6 +20,7 @@ export type RootStackParamList = {
   InsuranceScreen: undefined;
   AboutScreen: undefined;
   SpecialOffersScreen: undefined;
+  ChooseTime : undefined;
   
     
   

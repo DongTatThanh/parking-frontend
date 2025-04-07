@@ -14,6 +14,7 @@ import InsuranceScreen from '@/screens/InsuranceScreen';
 import AboutScreen from '@/screens/AboutScreen';
 import SpecialOffersScreen from '@/screens/SpecialOffersScreen';
 import PaymentScreen from '@/screens/PaymentScreen';
+import ChooseTime from "../screens/booking/ChooseTime";
 
 const Stack = createStackNavigator();
 
@@ -43,6 +44,8 @@ const MainNavigator = () => {
           component={PaymentScreen} 
           options={{ title: "Thanh toán " }}
         />
+          <Stack.Screen name='ChooseTime' component={ChooseTime}
+          options={{ title: "chọn thời gian" }}/>
     </Stack.Navigator>
   );
 };

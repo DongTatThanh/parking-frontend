@@ -14,7 +14,8 @@ import ServicesScreen from '@/screens/booking/ServicesScreen';
 import BarkingLayoutScreen from '@/screens/booking/BarkingLayoutScreen';
 import BookingConfirmationScreen from '@/screens/booking/BookingConfirmationScreen';
 import SpecialOffersScreen from '@/screens/SpecialOffersScreen';
-
+import ChooseTime from "../screens/booking/ChooseTime"
+;
 
 const Stack = createStackNavigator();
 
@@ -63,6 +64,7 @@ const AuthNavigation = () => {
      name='BookingConfirmationScreen'
      component={BookingConfirmationScreen}
      />
+     <Stack.Screen name='ChooseTime' component={ChooseTime}/>
     
     
     </Stack.Navigator>
