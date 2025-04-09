@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SafeAreaView, ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 
 const ChooseTime: React.FC = () => {
   const navigation = useNavigation();
@@ -15,6 +15,14 @@ const ChooseTime: React.FC = () => {
   const years = ['2025', '2026', '2027'];
   const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
   const minutes = ['00', '15', '30', '45'];
+
+  const formatDate = (date: Date): string => {
+    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+  };
+
+  const formatTime = (date: Date): string => {
+    return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
 
   const validateDate = (date: Date): boolean => {
     const currentDate = new Date();
@@ -55,19 +63,37 @@ const ChooseTime: React.FC = () => {
   };
 
   const handleConfirm = () => {
-    if (!validateDate(selectedStartDate)) {
-      return;
-    }
-    
     if (!validateTimeRange()) {
       return;
     }
 
-    // Xử lý logic xác nhận đặt chỗ ở đây
-    console.log('Thời gian bắt đầu:', selectedStartDate);
-    console.log('Thời gian kết thúc:', selectedEndDate);
+    const formattedDate = formatDate(selectedStartDate);
+    const formattedStartTime = formatTime(selectedStartDate);
+    const formattedEndTime = formatTime(selectedEndDate);
     
-    navigation.navigate('BookingScreen' as never);
+    const totalMinutes = Math.round((selectedEndDate.getTime() - selectedStartDate.getTime()) / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const durationText = `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`;
+
+    console.log("Sending params to BookingScreen:", {
+      bookingDate: formattedDate,
+      startTime: formattedStartTime,
+      endTime: formattedEndTime,
+      duration: durationText
+    });
+
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'BookingScreen',
+        params: {
+          bookingDate: formattedDate,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime,
+          duration: durationText
+        },
+      })
+    );
   };
 
   const handleEndTimeChange = (hours: number, minutes: number) => {

@@ -1,9 +1,24 @@
 export type RootStackParamList = {
   
   
-  BookingScreen: undefined;
+  BookingScreen: {
+    bookingDate?: string;
+    startTime?: string;
+    endTime?: string;
+    duration?: string;
+  };
+ 
   BarkingLayoutScreen: { zoneId: string };
-  PaymentScreen: { spotId: string; amount: number; duration: string };
+  PaymentScreen: {
+    spotId: string;
+    bookingCode?: string;
+    userName?: string;
+    phone?: string;
+    bookingTime?: string;
+    ticketType?: string;
+    expiryTime?: string;
+    totalAmount?: number;
+  };
   ServicesScreen: { id: string };
   BookingConfirmationScreen:{
     spotId: string; 
@@ -20,7 +35,7 @@ export type RootStackParamList = {
   InsuranceScreen: undefined;
   AboutScreen: undefined;
   SpecialOffersScreen: undefined;
-  ChooseTime : undefined;
+  ChooseTime: undefined;
   
     
   

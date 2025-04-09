@@ -9,7 +9,7 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
 
@@ -40,8 +40,13 @@ const ProgressBar: React.FC<{ progress: number, color: string }> = ({ progress, 
 
 const BookingScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute();
-  const { bookingDate, startTime, endTime } = route.params || {};
+  const route = useRoute<RouteProp<RootStackParamList, 'BookingScreen'>>();
+  
+  // Mục đích debug - kiểm tra xem params có được truyền không
+  console.log('Route params:', route.params);
+  
+  // Lấy dữ liệu từ params với giá trị mặc định
+  const { bookingDate = 'Chưa chọn', startTime = 'Chưa chọn', endTime = 'Chưa chọn', duration = '' } = route.params || {};
   
   // Get today's date
   const today = new Date();
@@ -76,19 +81,30 @@ const BookingScreen: React.FC = () => {
             
             <View style={styles.formGroup}>
               <Text style={styles.label}>Ngày đặt chỗ</Text>
-              <TouchableOpacity onPress={() => navigation.navigate("ChooseTime")} style={styles.dateInput}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate("ChooseTime")} 
+                style={styles.dateInput}
+              >
                 <Text>{bookingDate}</Text>
               </TouchableOpacity>
             </View>
             
             <View style={styles.formGroup}>
-              <Text style={styles.label }>Giờ đặt chỗ</Text>
-              <TouchableOpacity onPress={() => navigation.navigate("ChooseTime")} style={styles.dateInput}  
-              
+              <Text style={styles.label}>Giờ đặt chỗ</Text>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate("ChooseTime")} 
+                style={styles.dateInput}  
               >
                 <Text>{startTime} - {endTime}</Text>
               </TouchableOpacity>
             </View>
+            
+            {duration ? (
+              <View style={styles.durationContainer}>
+                <Text style={styles.durationLabel}>Tổng thời gian:</Text>
+                <Text style={styles.durationValue}>{duration}</Text>
+              </View>
+            ) : null}
           </View>
           
           {/* Parking zones */}
@@ -406,6 +422,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  durationContainer: {
+    marginTop: 8,
+    backgroundColor: '#e6f7ff',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  durationLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#0077cc',
+  },
+  durationValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0077cc',
   },
 });
 

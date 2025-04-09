@@ -23,7 +23,7 @@ const MainNavigator = () => {
 
     <Stack.Navigator screenOptions={{ headerShown: false }}>
 
-    <Stack.Screen name="AuthNavigator" component={AuthNavigator} />
+    <Stack.Screen name="AuthNavigator" component={AuthNavigator} /> 
       <Stack.Screen name="TabNavigator" component={TabNavigator} />
       <Stack.Screen name="ServicesScreen" component={ServicesScreen} />
       <Stack.Screen name='BookingScreen' component={BookingScreen}/>

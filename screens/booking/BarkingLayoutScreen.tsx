@@ -100,7 +100,7 @@ const ParkingLayoutScreen: React.FC = () => {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← </Text>Back
+            <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
           
           <Text style={styles.headerTitle}>Sơ đồ khu {zoneId}</Text>
@@ -222,7 +222,6 @@ const ParkingLayoutScreen: React.FC = () => {
                           ticketType: "Tiêu chuẩn",
                           expiryTime: new Date(Date.now() + 3600000).toISOString(),
                           totalAmount: 5000
-                          
                         });
                       }
                     }
