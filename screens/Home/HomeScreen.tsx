@@ -19,10 +19,10 @@ const { width } = Dimensions.get('window');
 
 // Placeholder services data
 const serviceData = [
-  { id: '1', title: 'Sửa xe tận nơi', image: require('../../assets/images/oto.png') },
-  { id: '2', title: 'Bảo dưỡng xe', image: require('../../assets/images/oto.png') },
-  { id: '3', title: 'Rửa xe tại nhà', image: require('../../assets/images/oto.png') },
-  { id: '4', title: 'Thay nhớt tận nơi', image: require('../../assets/images/oto.png') },
+  { id: '1', title: 'Sửa xe tận nơi', image: require('../../assets/images/gara-sua-chua-bao-duong-o-to-quan-1-1.jpg') },
+  { id: '2', title: 'Bảo dưỡng xe', image: require('../../assets/images/bao-duong-dinh-ky-dung-han-se-giup-xe-han-che-hu-hong-hoat-dong-on-dinh-nang-cao-tuoi-tho-dap-ung-tot-cac-quy-dinh-ve-an-toan-va-moi-truong.jpeg') },
+  { id: '3', title: 'Rửa xe', image: require('../../assets/images/oto.png') },
+  { id: '4', title: 'Cứu hộ xe', image: require('../../assets/images/oto.png') },
   
 ];
 

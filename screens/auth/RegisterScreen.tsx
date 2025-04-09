@@ -16,7 +16,7 @@ const RegisterScreen = () => {
 
   return (
     <ImageBackground
-      source={require('../../assets/images/nen.jpg')}
+      source={require('../../assets/images/logo1.png')}
       style={styles.background}
     >
       <TouchableOpacity 

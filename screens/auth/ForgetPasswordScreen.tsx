@@ -11,7 +11,7 @@ const ForgetPasswordScreen = () => {
 
   return (
     <ImageBackground
-      source={require('../../assets/images/nen.jpg')}
+      source={require('../../assets/images/logo1.png')}
       style={styles.background}
       imageStyle={{opacity: 0.8}}
     >

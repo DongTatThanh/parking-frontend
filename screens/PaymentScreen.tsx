@@ -49,6 +49,12 @@ const PaymentScreen: React.FC = () => {
       icon: '🏦', // Replace with actual icon image
       color: '#2c7a7b',
     },
+    {
+      id: 'cash',
+      name: 'Tiền mặt',
+      icon: '💵', // Replace with actual icon image
+      color: '#2c7a7b',
+    },
   ];
   const handlePaymentSelect = (methodId: string) => {
     setSelectedMethod(methodId);

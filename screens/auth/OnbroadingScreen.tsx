@@ -25,14 +25,14 @@ const OnbroadingScreen = () => {
       >
         <View style={styles.slide}>
           <Image 
-            source={require('../../assets/images/nen.jpg')} 
+            source={require('../../assets/images/hinh-anh-xe-oto-dep-30.jpg')} 
             style={styles.fullImage}
           />
         </View>
 
         <View style={styles.slide}>
           <Image 
-            source={require('../../assets/images/nen.jpg')} 
+            source={require('../../assets/images/Siêu-xe-Mc-Laren-4k-chất-chơi-scaled.jpg')} 
             style={styles.fullImage}
           />
         </View>

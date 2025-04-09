@@ -3,6 +3,7 @@ import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BackButton } from '../../components/common/BackButton';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
@@ -11,20 +12,30 @@ const LoginScreen = () => {
 
   return (
     <ImageBackground 
-      source={require('../../assets/images/on1.png')} 
+      source={require('../../assets/images/logo1.png')} 
       style={styles.background}
     >
       <View style={styles.container}>
         <BackButton />
-        <TextInput 
-          style={styles.input} 
-          placeholder="Nhập email hoặc số điện thoại" 
-        />
-        <TextInput 
-          style={styles.input} 
-          placeholder="Mật khẩu" 
-          secureTextEntry 
-        />
+        
+        {/* Trường nhập email/số điện thoại với icon */}
+        <View style={styles.inputContainer}>
+          <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Nhập email hoặc số điện thoại" 
+          />
+        </View>
+        
+        {/* Trường nhập mật khẩu với icon */}
+        <View style={styles.inputContainer}>
+          <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Mật khẩu" 
+            secureTextEntry 
+          />
+        </View>
 
         <View style={styles.linkContainer}>
           <TouchableOpacity onPress={() => navigation.navigate("RegisterScreen" as never)} >
@@ -61,13 +72,22 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
   },
-  input: {
+  inputContainer: {
     width: '100%',
-    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
     marginBottom: 20,
-    paddingHorizontal: 10,
     borderRadius: 20,
+    paddingHorizontal: 10,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    height: 50,
+    paddingHorizontal: 10,
   },
   linkContainer: {
     width: '100%',
@@ -99,9 +119,9 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-  }
+  },
 });
 
 export default LoginScreen;
