@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { appColor } from '../../constants/appColors';
+import axios from 'axios';
+import { Alert } from 'react-native';
 
 const RegisterScreen = () => {
   const navigation = useNavigation();
@@ -13,6 +15,114 @@ const RegisterScreen = () => {
     password: '',
     confirmPassword: '',
   });
+  const [loading, setLoading] = useState(false);
+
+  // Validate form data
+  const validateForm = () => {
+    if (!formData.fullName.trim()  && formData.fullName.length < 6) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên họ tên phải lớn hơn 6 chữ số ');
+      return false;
+    }
+    if (formData.fullName.length < 6) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên họ tên phải lớn hơn 6 chữ số ');
+      return false;
+    }
+    
+    if (!formData.email.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email');
+      return false;
+    }
+    
+    // Email validation regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      Alert.alert('Lỗi', 'Email không hợp lệ');
+      return false;
+    }
+    
+    if (!formData.phone.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại');
+      return false;
+    }
+    if (formData.phone.trim().length !== 10 || !/^\d{10}$/.test(formData.phone.trim())) {
+      Alert.alert('Lỗi', 'Số điện thoại phải gồm đúng 10 chữ số');
+      return false;
+    }
+    
+    if (formData.password.length < 6) {
+      Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
+      return false;
+    }
+    
+    if (formData.password !== formData.confirmPassword) {
+      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Handle registration
+  const handleRegister = async () => {
+    if (!validateForm()) return;
+    
+    setLoading(true);
+    
+    try {
+      // Thêm các trường mà server yêu cầu
+      const userData = {
+        name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        username: formData.email, // Có thể server yêu cầu username
+        role: "user" // Có thể server yêu cầu role
+        // Thêm các trường khác nếu cần
+      };
+      
+      console.log('Sending registration data:', userData);
+      
+      const response = await axios.post('http://192.168.1.28:3000/api/auth/register', userData);
+      
+      console.log('Registration response:', response.data);
+      
+      if (response.data && response.data.success) {
+        Alert.alert(
+          'Thành công', 
+          'Đăng ký tài khoản thành công!', 
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } else {
+        Alert.alert('Lỗi', response.data.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      if (error.response) {
+        console.log('Error details:', error.response.data);
+        
+        // Bắt lỗi số điện thoại trùng lặp
+        if (error.response.data.error && error.response.data.error.includes('Duplicate entry') && error.response.data.error.includes('phone')) {
+          Alert.alert('Lỗi', 'Số điện thoại này đã được đăng ký. Vui lòng sử dụng số điện thoại khác.');
+        } 
+        // Bắt lỗi email trùng lặp
+        else if (error.response.data.error && error.response.data.error.includes('Duplicate entry') && error.response.data.error.includes('email')) {
+          Alert.alert('Lỗi', 'Email này đã được đăng ký. Vui lòng sử dụng email khác.');
+        }
+        // Các lỗi khác
+        else {
+          Alert.alert('Lỗi', error.response.data.message || error.response.data.error || 'Đăng ký thất bại. Vui lòng thử lại.');
+        }
+      } else if (error.request) {
+        // No response received
+        Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.');
+      } else {
+        // Other error
+        Alert.alert('Lỗi', 'Đã xảy ra lỗi trong quá trình đăng ký. Vui lòng thử lại.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <ImageBackground
@@ -83,8 +193,16 @@ const RegisterScreen = () => {
           />
         </View>
 
-        <TouchableOpacity style={styles.registerButton}>
-          <Text style={styles.registerButtonText}>Đăng ký</Text>
+        <TouchableOpacity 
+          style={styles.registerButton}
+          onPress={handleRegister}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.registerButtonText}>Đăng ký</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.loginContainer}>
