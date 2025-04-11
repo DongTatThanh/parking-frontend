@@ -8,7 +8,11 @@ export type RootStackParamList = {
     duration?: string;
   };
  
-  BarkingLayoutScreen: { zoneId: string };
+  BarkingLayoutScreen: { 
+    zoneId: string,
+    totalSpots: number;
+    availableSpots: number;
+   };
   PaymentScreen: {
     spotId: string;
     bookingCode?: string;

@@ -31,13 +31,13 @@ const LoginScreen = () => {
     setLoading(true);
     
     try {
-      const response = await axios.post('http://192.168.1.28:3000/api/auth/login', {
+      const response = await axios.post('http://192.168.0.101:3000/api/auth/login', {
         username: username,
         password: password
       });
       
       console.log('Login response:', response.data);
-      
+    
       if (response.data && response.data.success) {
         // Lưu token vào AsyncStorage
         if (response.data.token) {

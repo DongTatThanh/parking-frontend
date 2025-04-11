@@ -17,11 +17,16 @@ const { width } = Dimensions.get('window');
 
 // Parking zones data
 const parkingZones = [
-  { id: "A", name: "Khu A", totalSpots: 50, availableSpots: 15 },
-  { id: "B", name: "Khu B", totalSpots: 30, availableSpots: 8 },
-  { id: "C", name: "Khu C", totalSpots: 45, availableSpots: 20 },
-  { id: "D", name: "Khu D", totalSpots: 25, availableSpots: 3 },
-  { id: "E", name: "Khu E", totalSpots: 35, availableSpots: 0 },
+  { id: "A1", name: "Khu A", totalSpots: 30, availableSpots: 49 },
+  { id: "B1", name: "Khu B", totalSpots: 30, availableSpots: 8 },
+  { id: "C1", name: "Khu C", totalSpots: 30, availableSpots: 20 },
+  { id: "D1", name: "Khu D", totalSpots: 254, availableSpots: 3 },
+  { id: "E1", name: "Khu E", totalSpots: 35, availableSpots: 0 },
+  { id: "A2", name: "Khu A", totalSpots: 59, availableSpots: 49 },
+  { id: "B2", name: "Khu B", totalSpots: 30, availableSpots: 8 },
+  { id: "C2", name: "Khu C", totalSpots: 45, availableSpots: 20 },
+  { id: "D2", name: "Khu D", totalSpots: 25, availableSpots: 3 },
+  { id: "E2", name: "Khu E", totalSpots: 35, availableSpots: 0 },
 ];
 
 // Progress bar component
@@ -132,7 +137,11 @@ const BookingScreen: React.FC = () => {
                       zone.availableSpots === 0 && styles.zoneCardDisabled
                     ]}
                     disabled={zone.availableSpots === 0}
-                    onPress={() => navigation.navigate('BarkingLayoutScreen', { zoneId: zone.id })}
+                    onPress={() => navigation.navigate('BarkingLayoutScreen', { 
+                      zoneId: zone.id, 
+                      totalSpots: zone.totalSpots,
+                      availableSpots: zone.availableSpots,
+                    })}
                   >
                     <View style={styles.zoneCardHeader}>
                       <Text style={styles.zoneName}>{zone.name}</Text>
@@ -230,7 +239,7 @@ const BookingScreen: React.FC = () => {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoTitle}>Liên hệ hỗ trợ</Text>
                   <Text style={styles.infoText}>
-                    Hotline: +84 123 456 789{'\n'}
+                    Hotline: +84 972068334{'\n'}
                     Email: support@timbainha.vn
                   </Text>
                 </View>

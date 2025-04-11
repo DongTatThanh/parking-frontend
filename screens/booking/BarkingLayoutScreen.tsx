@@ -16,36 +16,6 @@ import { RootStackParamList } from '../../Navigation/types';
 
 const { width } = Dimensions.get('window');
 
-// Mock parking spots data
-const generateParkingSpots = (zoneId: string, count: number) => {
-  const spots = [];
-  
-  // Randomly assign availability status
-  for (let i = 1; i <= count; i++) {
-    const spotId = `${zoneId}${i.toString().padStart(2, '0')}`;
-    const isAvailable = Math.random() > 0.4; // 60% available
-    const isDisabled = Math.random() > 0.9; // 10% disabled parking 
-    
-    spots.push({
-      id: spotId,
-      isAvailable,
-      isDisabled,
-      isSelected: false,
-    });
-  }
-  
-  return spots;
-};
-
-// Parking zones data with corresponding number of spots
-const parkingZonesSpots: Record<string, number> = {
-  "A": 24,
-  "B": 18,
-  "C": 30,
-  "D": 16,
-  "E": 20,
-};
-
 type ParkingSpot = {
   id: string;
   isAvailable: boolean;
@@ -53,19 +23,23 @@ type ParkingSpot = {
   isSelected: boolean;
 };
 
-type ParkingLayoutScreenRouteProp = RouteProp<RootStackParamList, 'BarkingLayoutScreen'>
+type ParkingLayoutScreenRouteProp = RouteProp<RootStackParamList, 'BarkingLayoutScreen'>;
 
 const ParkingLayoutScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<ParkingLayoutScreenRouteProp>();
-  const { zoneId } = route.params;
-  
+  const { zoneId, totalSpots, availableSpots } = route.params; // Get totalSpots and availableSpots from route params
+
   // Generate spots for the selected zone
-  const spotCount = parkingZonesSpots[zoneId] || 20;
   const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>(
-    generateParkingSpots(zoneId, spotCount)
+    Array.from({ length: totalSpots }).map((_, index) => ({
+      id: `${zoneId}${(index + 1).toString().padStart(2, '0')}`,
+      isAvailable: index < availableSpots, // First `availableSpots` are available, rest are occupied
+      isDisabled: false, // You can customize this logic if needed
+      isSelected: false,
+    }))
   );
-  
+
   // Handle spot selection
   const handleSpotSelection = (spotId: string) => {
     const updatedSpots = parkingSpots.map(spot => {
@@ -79,21 +53,24 @@ const ParkingLayoutScreen: React.FC = () => {
         return { ...spot, isSelected: false };
       }
     });
-    
+
     setParkingSpots(updatedSpots);
   };
-  
+
   // Get selected spot
   const selectedSpot = parkingSpots.find(spot => spot.isSelected);
-  
-  // Calculate layout rows and columns
-  const columns = Math.ceil(Math.sqrt(spotCount));
-  const rows = Math.ceil(spotCount / columns);
-  
+
+  // Calculate layout rows, columns, and spot size
+  const columns = Math.ceil(Math.sqrt(totalSpots));
+  const rows = Math.ceil(totalSpots / columns);
+  const spotSize = Math.min(
+    (Dimensions.get('window').width - 40) / columns - 8, // Adjust for padding and spacing
+    50 // Maximum size for a spot
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity 
@@ -102,13 +79,11 @@ const ParkingLayoutScreen: React.FC = () => {
           >
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
-          
           <Text style={styles.headerTitle}>Sơ đồ khu {zoneId}</Text>
           <Text style={styles.headerSubtitle}>
             Chọn vị trí đỗ xe của bạn
           </Text>
         </View>
-        
         <View style={styles.content}>
           {/* Legend */}
           <View style={styles.legend}>
@@ -126,31 +101,30 @@ const ParkingLayoutScreen: React.FC = () => {
               <Text style={styles.legendText}>Đã chọn</Text>
             </View>
           </View>
-          
           {/* Parking Map */}
           <View style={styles.parkingMap}>
             <View style={styles.entranceSign}>
               <Text style={styles.entranceText}>Lối vào</Text>
             </View>
-            
             <View style={styles.parkingGrid}>
               {Array.from({ length: rows }).map((_, rowIndex) => (
                 <View key={`row-${rowIndex}`} style={styles.parkingRow}>
                   {Array.from({ length: columns }).map((_, colIndex) => {
                     const spotIndex = rowIndex * columns + colIndex;
-                    
+
                     // Check if spot exists
                     if (spotIndex >= parkingSpots.length) {
-                      return <View key={`empty-${colIndex}`} style={styles.emptySpot} />;
+                      return <View key={`empty-${colIndex}`} style={[styles.emptySpot, { width: spotSize, height: spotSize }]} />;
                     }
-                    
+
                     const spot = parkingSpots[spotIndex];
-                    
+
                     return (
                       <TouchableOpacity
                         key={spot.id}
                         style={[
                           styles.parkingSpot,
+                          { width: spotSize, height: spotSize },
                           !spot.isAvailable && styles.occupiedSpot,
                           spot.isDisabled && styles.disabledSpot,
                           spot.isSelected && styles.selectedSpot,
@@ -166,35 +140,29 @@ const ParkingLayoutScreen: React.FC = () => {
               ))}
             </View>
           </View>
-          
           {/* Booking Details */}
           <View style={styles.bookingDetails}>
             <Text style={styles.detailsTitle}>Chi tiết đặt chỗ</Text>
-            
             <View style={styles.detailsRow}>
               <Text style={styles.detailsLabel}>Khu vực:</Text>
               <Text style={styles.detailsValue}>Khu {zoneId}</Text>
             </View>
-            
             <View style={styles.detailsRow}>
               <Text style={styles.detailsLabel}>Vị trí:</Text>
               <Text style={styles.detailsValue}>
                 {selectedSpot ? selectedSpot.id : "Chưa chọn"}
               </Text>
             </View>
-            
             <View style={styles.detailsRow}>
               <Text style={styles.detailsLabel}>Thời gian:</Text>
               <Text style={styles.detailsValue}>
                 {new Date().toLocaleDateString()} - 08:00
               </Text>
             </View>
-            
             <View style={styles.detailsRow}>
               <Text style={styles.detailsLabel}>Giá:</Text>
               <Text style={styles.detailsValue}>15.000 VND/giờ</Text>
             </View>
-            
             <TouchableOpacity 
               style={[
                 styles.confirmButton,
@@ -202,33 +170,22 @@ const ParkingLayoutScreen: React.FC = () => {
               ]}
               disabled={!selectedSpot}
               onPress={() => {
-                Alert.alert(
-                  "Xác nhận đặt chỗ",
-                  `Bạn đã chọn vị trí ${selectedSpot?.id}. Xác nhận đặt chỗ?`,
-                  [
-                    {
-                      text: "Hủy",
-                      style: "cancel"
-                    },
-                    { 
-                      text: "Xác nhận", 
-                      onPress: () => {   
-                        navigation.navigate("PaymentScreen", {
-                          spotId: "spot-123",
-                          bookingCode: "BC-113",
-                          userName: "Người dùng",
-                          phone: "0123456789",
-                          bookingTime: new Date().toISOString(),
-                          ticketType: "Tiêu chuẩn",
-                          expiryTime: new Date(Date.now() + 3600000).toISOString(),
-                          totalAmount: 5000
-                        });
-                      }
-                    }
-                  ]
-                );
+                if (!selectedSpot) {
+                  Alert.alert("Lỗi", "Vui lòng chọn một vị trí trước khi xác nhận.");
+                  return;
+                }
+                navigation.navigate("PaymentScreen", {
+                  spotId: selectedSpot.id, // Ensure selectedSpot is defined
+                  bookingCode: "BC-113",
+                  userName: "Người dùng",
+                  phone: "0123456789",
+                  bookingTime: new Date().toISOString(),
+                  ticketType: "Tiêu chuẩn",
+                  expiryTime: new Date(Date.now() + 3600000).toISOString(),
+                  totalAmount: 5000,
+                });
               }}
-              >
+            >
               <Text style={styles.confirmButtonText}>
                 {selectedSpot ? "Xác nhận đặt chỗ" : "Vui lòng chọn vị trí"}
               </Text>
@@ -351,8 +308,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   parkingSpot: {
-    width: 50,
-    height: 50,
     borderWidth: 1,
     borderColor: '#10b981',
     borderRadius: 4,
@@ -378,9 +333,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   emptySpot: {
-    width: 50,
-    height: 50,
-    margin: 4,
     backgroundColor: 'transparent',
   },
   bookingDetails: {
