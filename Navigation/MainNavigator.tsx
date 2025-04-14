@@ -46,7 +46,9 @@ const MainNavigator = () => {
         />
           <Stack.Screen name='ChooseTime' component={ChooseTime}
           options={{ title: "chọn thời gian" }}/>
+          
     </Stack.Navigator>
+
   );
 };
 

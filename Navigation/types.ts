@@ -6,7 +6,12 @@ export type RootStackParamList = {
     startTime?: string;
     endTime?: string;
     duration?: string;
+    monthlyStartDate?: string;
   };
+  ChooseTime: {
+    type: 'daily' | 'monthly';
+  };
+
  
   BarkingLayoutScreen: { 
     zoneId: string,
@@ -39,7 +44,7 @@ export type RootStackParamList = {
   InsuranceScreen: undefined;
   AboutScreen: undefined;
   SpecialOffersScreen: undefined;
-  ChooseTime: undefined;
+
   
     
   

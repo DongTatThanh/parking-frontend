@@ -36,19 +36,19 @@ const PaymentScreen: React.FC = () => {
     {
       id: 'momo',
       name: 'Ví MoMo',
-      icon: '💸',
+      icon: require('../assets/images/momo.jpg'),
       color: '#ae2070',
     },
     {
       id: 'zalopay',
       name: 'ZaloPay',
-      icon: '💳',
+      icon: require('../assets/images/zalopay.jpg'),
       color: '#0068ff',
     },
     {
       id: 'vnpay',
       name: 'VNPay',
-      icon: '💰',
+      icon: require('../assets/images/vnpay.jpg'),
       color: '#0a5cbd',
     },
     {

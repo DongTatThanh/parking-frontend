@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { SafeAreaView, ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../Navigation/types';
 
 const ChooseTime: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'ChooseTime'>>();
+  
+  const { type = 'daily' } = route.params || {}; // Nhận type từ params (daily hoặc monthly)
+
   const [selectedStartDate, setSelectedStartDate] = useState(new Date());
   const [selectedEndDate, setSelectedEndDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString());
   const months = Array.from({ length: 12 }, (_, i) => (i + 1).toString());
@@ -58,48 +62,45 @@ const ChooseTime: React.FC = () => {
   const handleDateChange = (newDate: Date) => {
     if (validateDate(newDate)) {
       setSelectedStartDate(newDate);
-      setSelectedEndDate(newDate);
+      setSelectedEndDate(newDate); // Đồng bộ ngày cho thời gian kết thúc
     }
-  };
-
-  const handleConfirm = () => {
-    if (!validateTimeRange()) {
-      return;
-    }
-
-    const formattedDate = formatDate(selectedStartDate);
-    const formattedStartTime = formatTime(selectedStartDate);
-    const formattedEndTime = formatTime(selectedEndDate);
-    
-    const totalMinutes = Math.round((selectedEndDate.getTime() - selectedStartDate.getTime()) / (1000 * 60));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    const durationText = `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`;
-
-    console.log("Sending params to BookingScreen:", {
-      bookingDate: formattedDate,
-      startTime: formattedStartTime,
-      endTime: formattedEndTime,
-      duration: durationText
-    });
-
-    navigation.dispatch(
-      CommonActions.navigate({
-        name: 'BookingScreen',
-        params: {
-          bookingDate: formattedDate,
-          startTime: formattedStartTime,
-          endTime: formattedEndTime,
-          duration: durationText
-        },
-      })
-    );
   };
 
   const handleEndTimeChange = (hours: number, minutes: number) => {
     const newEndDate = new Date(selectedEndDate);
     newEndDate.setHours(hours, minutes);
     setSelectedEndDate(newEndDate);
+  };
+
+  const handleConfirm = () => {
+    if (type === 'daily') {
+      // Xử lý cho Vé Ngày
+      if (!validateTimeRange()) {
+        return;
+      }
+
+      const formattedDate = formatDate(selectedStartDate);
+      const formattedStartTime = formatTime(selectedStartDate);
+      const formattedEndTime = formatTime(selectedEndDate);
+      
+      const totalMinutes = Math.round((selectedEndDate.getTime() - selectedStartDate.getTime()) / (1000 * 60));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const durationText = `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`;
+
+      navigation.navigate('BookingScreen', {
+        bookingDate: formattedDate,
+        startTime: formattedStartTime,
+        endTime: formattedEndTime,
+        duration: durationText,
+      });
+    } else {
+      // Xử lý cho Vé Tháng
+      const formattedDate = formatDate(selectedStartDate);
+      navigation.navigate('BookingScreen', {
+        monthlyStartDate: selectedStartDate.toISOString(),
+      });
+    }
   };
 
   return (
@@ -109,8 +110,9 @@ const ChooseTime: React.FC = () => {
           <View style={styles.dateSelectionCard}>
             <Text style={styles.sectionTitle}>Chọn thời gian</Text>
 
+            {/* Chọn ngày */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Ngày đặt chỗ</Text>
+              <Text style={styles.label}>{type === 'daily' ? 'Ngày đặt chỗ' : 'Ngày bắt đầu'}</Text>
               <View style={styles.pickerRow}>
                 <Picker
                   selectedValue={selectedStartDate.getDate().toString()}
@@ -154,57 +156,61 @@ const ChooseTime: React.FC = () => {
               </View>
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Thời gian bắt đầu</Text>
-              <View style={styles.pickerRow}>
-                <Picker
-                  selectedValue={selectedStartDate.getHours().toString().padStart(2, '0')}
-                  onValueChange={(itemValue) => setSelectedStartDate(new Date(selectedStartDate.setHours(parseInt(itemValue))))}
-                  style={styles.picker}
-                >
-                  {hours.map((hour) => (
-                    <Picker.Item key={hour} label={hour} value={hour} />
-                  ))}
-                </Picker>
-                <Picker
-                  selectedValue={selectedStartDate.getMinutes().toString().padStart(2, '0')}
-                  onValueChange={(itemValue) => setSelectedStartDate(new Date(selectedStartDate.setMinutes(parseInt(itemValue))))}
-                  style={styles.picker}
-                >
-                  {minutes.map((minute) => (
-                    <Picker.Item key={minute} label={minute} value={minute} />
-                  ))}
-                </Picker>
-              </View>
-            </View>
+            {/* Chỉ hiển thị chọn giờ nếu là Vé Ngày */}
+            {type === 'daily' && (
+              <>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Thời gian bắt đầu</Text>
+                  <View style={styles.pickerRow}>
+                    <Picker
+                      selectedValue={selectedStartDate.getHours().toString().padStart(2, '0')}
+                      onValueChange={(itemValue) => setSelectedStartDate(new Date(selectedStartDate.setHours(parseInt(itemValue))))}
+                      style={styles.picker}
+                    >
+                      {hours.map((hour) => (
+                        <Picker.Item key={hour} label={hour} value={hour} />
+                      ))}
+                    </Picker>
+                    <Picker
+                      selectedValue={selectedStartDate.getMinutes().toString().padStart(2, '0')}
+                      onValueChange={(itemValue) => setSelectedStartDate(new Date(selectedStartDate.setMinutes(parseInt(itemValue))))}
+                      style={styles.picker}
+                    >
+                      {minutes.map((minute) => (
+                        <Picker.Item key={minute} label={minute} value={minute} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Thời gian kết thúc</Text>
-              <View style={styles.pickerRow}>
-                <Picker
-                  selectedValue={selectedEndDate.getHours().toString().padStart(2, '0')}
-                  onValueChange={(itemValue) => handleEndTimeChange(parseInt(itemValue), selectedEndDate.getMinutes())}
-                  style={styles.picker}
-                >
-                  {hours.map((hour) => (
-                    <Picker.Item key={hour} label={hour} value={hour} />
-                  ))}
-                </Picker>
-                <Picker
-                  selectedValue={selectedEndDate.getMinutes().toString().padStart(2, '0')}
-                  onValueChange={(itemValue) => handleEndTimeChange(selectedEndDate.getHours(), parseInt(itemValue))}
-                  style={styles.picker}
-                >
-                  {minutes.map((minute) => (
-                    <Picker.Item key={minute} label={minute} value={minute} />
-                  ))}
-                </Picker>
-              </View>
-            </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Thời gian kết thúc</Text>
+                  <View style={styles.pickerRow}>
+                    <Picker
+                      selectedValue={selectedEndDate.getHours().toString().padStart(2, '0')}
+                      onValueChange={(itemValue) => handleEndTimeChange(parseInt(itemValue), selectedEndDate.getMinutes())}
+                      style={styles.picker}
+                    >
+                      {hours.map((hour) => (
+                        <Picker.Item key={hour} label={hour} value={hour} />
+                      ))}
+                    </Picker>
+                    <Picker
+                      selectedValue={selectedEndDate.getMinutes().toString().padStart(2, '0')}
+                      onValueChange={(itemValue) => handleEndTimeChange(selectedEndDate.getHours(), parseInt(itemValue))}
+                      style={styles.picker}
+                    >
+                      {minutes.map((minute) => (
+                        <Picker.Item key={minute} label={minute} value={minute} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+              </>
+            )}
 
-            <TouchableOpacity  style={styles.confirmButton} onPress={handleConfirm}>
-              <Text style={styles.confirmButtonText}>Xác nhận thời gian đặt </Text>
-            
+            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
+              <Text style={styles.confirmButtonText}>Xác nhận thời gian đặt</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -225,7 +231,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     backgroundColor: 'black',
     padding: 16,
-    borderRadius:30,
+    borderRadius: 30,
     alignItems: 'center',
     marginTop: 16,
   },
@@ -237,4 +243,3 @@ const styles = StyleSheet.create({
 });
 
 export default ChooseTime;
-
