@@ -9,24 +9,44 @@ import {
   Dimensions,
   StatusBar,
   TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 
 const { width } = Dimensions.get('window');
 
-// Parking zones data (đã sửa để availableSpots <= totalSpots)
-const parkingZones = [
-  { id: "A1", name: "Khu A", totalSpots: 50, availableSpots: 49 },
-  { id: "B1", name: "Khu B", totalSpots: 30, availableSpots: 8 },
-  { id: "C1", name: "Khu C", totalSpots: 30, availableSpots: 20 },
-  { id: "D1", name: "Khu D", totalSpots: 254, availableSpots: 3 },
-  { id: "E1", name: "Khu E", totalSpots: 35, availableSpots: 0 },
-  { id: "A2", name: "Khu A", totalSpots: 59, availableSpots: 49 },
-  
-];
+// Định nghĩa các interface
+interface ParkingZone {
+  id: string;
+  name: string;
+  totalSpots: number;
+  availableSpots: number;
+}
+
+interface ParkingSpot {
+  id: number;
+  status: 'available' | 'occupied' | 'reserved';
+  position: { row: number; col: number };
+}
+
+interface ZoneDetails extends ParkingZone {
+  spots: ParkingSpot[];
+}
+
+interface PriceResponse {
+  price: number;
+  currency: string;
+  priceDetails?: {
+    basePrice: number;
+    discounts?: { name: string; amount: number }[];
+    taxes?: { name: string; amount: number }[];
+  };
+}
 
 // Progress bar component
 const ProgressBar: React.FC<{ progress: number, color: string }> = ({ progress, color }) => {
@@ -67,6 +87,64 @@ const BookingScreen: React.FC = () => {
   // State cho số điện thoại
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [isPhoneNumberConfirmed, setIsPhoneNumberConfirmed] = useState<boolean>(false);
+
+  // Thêm state để lưu danh sách khu vực
+  const [parkingZones, setParkingZones] = useState<ParkingZone[]>([]);
+  const [priceInfo, setPriceInfo] = useState<PriceResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Thêm hàm fetchParkingZones
+  const fetchParkingZones = async () => {
+    try {
+      console.log('Đang gọi API lấy danh sách khu vực đỗ xe...');
+      // API endpoint phải khớp với bookingController.getParkingZones
+      const response = await axios.get('http://192.168.0.101:3000/api/bookings/zones');
+      
+      console.log('API Response:', response.data);
+      
+      if (response.data && response.data.success) {
+        // Map dữ liệu từ API theo cấu trúc database
+        const mappedZones = response.data.data.map((zone: any) => ({
+          id: zone.zone_id.toString(),
+          name: zone.zone_name,
+          totalSpots: zone.total_slots, 
+          availableSpots: zone.available_slots
+        }));
+        
+        setParkingZones(mappedZones);
+      } else {
+        throw new Error('API trả về dữ liệu không hợp lệ');
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách khu vực đỗ xe:', error);
+      // Hiển thị thông báo lỗi chi tiết hơn
+      const errorMessage = error.response ? 
+        `Lỗi ${error.response.status}: ${error.response.data?.message || 'Không thể kết nối đến server'}` :
+        'Không thể kết nối đến server, vui lòng kiểm tra kết nối mạng';
+      
+      Alert.alert(
+        'Lỗi kết nối API', 
+        errorMessage,
+        [
+          {text: 'Thử lại', onPress: fetchParkingZones},
+          {text: 'Dùng dữ liệu mẫu', onPress: () => {
+            setParkingZones([
+              { id: "1", name: "Khu A", totalSpots: 30, availableSpots: 28 },
+              { id: "2", name: "Khu B", totalSpots: 20, availableSpots: 19 },
+              { id: "3", name: "Khu C", totalSpots: 25, availableSpots: 24 }
+            ]);
+          }}
+        ]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Gọi API khi component mount
+  useEffect(() => {
+    fetchParkingZones();
+  }, []);
 
   // Lấy thông tin người dùng từ AsyncStorage
   useEffect(() => {
@@ -255,6 +333,22 @@ const BookingScreen: React.FC = () => {
           <Text style={styles.durationValue}>{dailyDuration}</Text>
         </View>
       ) : null}
+      
+      {dailyBookingDate !== 'Chưa chọn' && dailyStartTime !== 'Chưa chọn' && (
+        <TouchableOpacity 
+          style={styles.calculateButton}
+          onPress={calculatePrice}
+        >
+          <Text style={styles.calculateButtonText}>Tính giá vé</Text>
+        </TouchableOpacity>
+      )}
+      
+      {priceInfo && (
+        <View style={styles.priceContainer}>
+          <Text style={styles.priceLabel}>Giá vé:</Text>
+          <Text style={styles.priceValue}>{priceInfo.price.toLocaleString()} {priceInfo.currency}</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -288,6 +382,205 @@ const BookingScreen: React.FC = () => {
       )}
     </View>
   );
+
+  const fetchZoneDetails = async (zoneId: string) => {
+    try {
+      setLoading(true);
+      console.log('Đang gọi API lấy chi tiết khu vực:', zoneId);
+      
+      // API endpoint phải khớp với bookingController.getZoneDetails
+      const response = await axios.get(`http://192.168.0.101:3000/api/bookings/zones/${zoneId}`);
+      
+      console.log('Zone details response:', response.data);
+      
+      if (response.data && response.data.success) {
+        // Map dữ liệu từ API response
+        const zoneData = response.data.data;
+        const mappedSlots = zoneData.slots ? zoneData.slots.map((slot: any) => ({
+          id: slot.slot_id,
+          code: slot.slot_code,
+          status: slot.status,
+          position: {
+            row: slot.position_x,
+            col: slot.position_y
+          }
+        })) : [];
+        
+        // Sửa navigation để phù hợp với RootStackParamList
+        navigation.navigate('BarkingLayoutScreen', { 
+          zoneId,
+          totalSpots: zoneData.total_slots || 0,
+          availableSpots: zoneData.available_slots || 0,
+          zoneData: JSON.stringify(mappedSlots)
+        });
+      } else {
+        throw new Error('API trả về dữ liệu không hợp lệ');
+      }
+    } catch (error) {
+      console.error(`Lỗi khi lấy chi tiết khu vực ${zoneId}:`, error);
+      Alert.alert(
+        'Lỗi', 
+        'Không thể tải thông tin chi tiết khu vực. Vui lòng thử lại sau.',
+        [{text: 'OK'}]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkLicensePlate = async () => {
+    if (!validateLicensePlate(licensePlate)) {
+      Alert.alert('Lỗi', 'Biển số xe không hợp lệ');
+      return false;
+    }
+
+    try {
+      console.log('Kiểm tra biển số xe:', licensePlate);
+      // Lấy thông tin user
+      const userData = await AsyncStorage.getItem('user');
+      const user = userData ? JSON.parse(userData) : null;
+      const userId = user?.id || 1;
+      
+      // API theo bookingController.checkLicensePlate
+      const response = await axios.post('http://192.168.0.101:3000/api/bookings/check-license-plate', {
+        licensePlate,
+        userId
+      });
+      
+      console.log('Check license plate response:', response.data);
+      
+      if (response.data && response.data.success) {
+        return true;
+      } else {
+        Alert.alert('Thông báo', response.data.message || 'Biển số xe không hợp lệ');
+        return false;
+      }
+    } catch (error) {
+      console.error('Lỗi khi kiểm tra biển số xe:', error);
+      Alert.alert('Lỗi', 'Không thể kiểm tra biển số xe. Vui lòng thử lại sau.');
+      return false;
+    }
+  };
+
+  const calculatePrice = async () => {
+    if (!dailyBookingDate || dailyStartTime === 'Chưa chọn' || dailyEndTime === 'Chưa chọn') {
+      Alert.alert('Thông báo', 'Vui lòng chọn đầy đủ ngày và giờ đặt chỗ');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('Tính giá vé với thông tin:', activeTab, dailyBookingDate, dailyStartTime, dailyEndTime);
+      
+      // Định dạng thời gian đúng cho API
+      const startDateTime = activeTab === 'daily' 
+        ? `${dailyBookingDate} ${dailyStartTime}` 
+        : monthlyStartDate;
+        
+      const endDateTime = activeTab === 'daily'
+        ? `${dailyBookingDate} ${dailyEndTime}`
+        : monthlyEndDate;
+      
+      // Tham số đúng với bookingController.calculateBookingPrice
+      const params = {
+        lotId: 1, // Mặc định bãi đỗ xe 1
+        bookingType: activeTab, // 'daily' hoặc 'monthly' 
+        startTime: startDateTime,
+        endTime: endDateTime
+      };
+      
+      const response = await axios.post(
+        'http://192.168.0.101:3000/api/bookings/calculate-price',
+        params
+      );
+      
+      console.log('Calculate price response:', response.data);
+      
+      if (response.data && response.data.success) {
+        // Cập nhật state với thông tin giá
+        setPriceInfo({
+          price: response.data.data.totalPrice,
+          currency: 'VND',
+          priceDetails: {
+            basePrice: response.data.data.pricePerUnit
+          }
+        });
+      } else {
+        throw new Error(response.data.message || 'Tính giá thất bại');
+      }
+    } catch (error) {
+      console.error('Lỗi khi tính giá vé:', error);
+      Alert.alert('Lỗi', 'Không thể tính giá vé. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createBooking = async (slotId: number, zoneId: string) => {
+    if (!isLicensePlateConfirmed || !isPhoneNumberConfirmed) {
+      Alert.alert('Thông báo', 'Vui lòng xác nhận biển số xe và số điện thoại');
+      return;
+    }
+
+    // Kiểm tra biển số xe hợp lệ không
+    const isLicensePlateValid = await checkLicensePlate();
+    if (!isLicensePlateValid) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('Tạo booking với thông tin:', activeTab, slotId, zoneId);
+      
+      // Lấy user_id từ AsyncStorage
+      const userData = await AsyncStorage.getItem('user');
+      const user = userData ? JSON.parse(userData) : null;
+      const userId = user?.id || 1;
+      
+      // Định dạng thời gian đúng
+      const startDateTime = activeTab === 'daily' 
+        ? `${dailyBookingDate} ${dailyStartTime}:00`
+        : `${monthlyStartDate} 00:00:00`;
+        
+      const endDateTime = activeTab === 'daily'
+        ? `${dailyBookingDate} ${dailyEndTime}:00`
+        : `${monthlyEndDate} 23:59:59`;
+      
+      // Dữ liệu booking theo controller
+      const bookingData = {
+        userId: userId,
+        lotId: 1, // Mặc định bãi đỗ xe 1
+        slotId: slotId,
+        priceId: 1, // Lấy từ response của calculatePrice
+        bookingType: activeTab,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        licensePlate: licensePlate,
+        phoneNumber: phoneNumber
+      };
+      
+      console.log('Sending booking data:', bookingData);
+      
+      const response = await axios.post('http://192.168.0.101:3000/api/bookings', bookingData);
+      
+      console.log('Create booking response:', response.data);
+      
+      if (response.data && response.data.success) {
+        Alert.alert(
+          'Thành công',
+          `Đã đặt chỗ thành công. Mã đặt chỗ: ${response.data.data.bookingId}`,
+          [{ text: 'OK', onPress: () => navigation.navigate('HomeScreen') }]
+        );
+      } else {
+        throw new Error(response.data.message || 'Đặt chỗ thất bại');
+      }
+    } catch (error) {
+      console.error('Lỗi khi tạo booking:', error);
+      Alert.alert('Lỗi', 'Không thể đặt chỗ. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -335,76 +628,79 @@ const BookingScreen: React.FC = () => {
           <View style={styles.parkingZonesSection}>
             <Text style={styles.sectionTitle}>Chọn khu vực đỗ xe</Text>
             
-            <View style={styles.zonesGrid}>
-              {parkingZones.map((zone) => {
-                let availabilityColor = '#10b981';
-                if (zone.availableSpots === 0) {
-                  availabilityColor = '#ef4444';
-                } else if (zone.availableSpots < 10) {
-                  availabilityColor = '#f59e0b';
-                }
-                
-                const occupancyRate = (zone.totalSpots - zone.availableSpots) / zone.totalSpots;
-                
-                return (
-                  <TouchableOpacity 
-                    key={zone.id}
-                    style={[
-                      styles.zoneCard,
-                      zone.availableSpots === 0 && styles.zoneCardDisabled
-                    ]}
-                    disabled={zone.availableSpots === 0}
-                    onPress={() => navigation.navigate('BarkingLayoutScreen', { 
-                      zoneId: zone.id, 
-                      totalSpots: zone.totalSpots,
-                      availableSpots: zone.availableSpots,
-                    })}
-                  >
-                    <View style={styles.zoneCardHeader}>
-                      <Text style={styles.zoneName}>{zone.name}</Text>
-                      <View 
-                        style={[
-                          styles.availabilityBadge, 
-                          { backgroundColor: `${availabilityColor}20` }
-                        ]}
-                      >
-                        <Text 
+            {loading ? (
+              <ActivityIndicator size="large" color="#3b82f6" style={{marginVertical: 20}} />
+            ) : (
+              <View style={styles.zonesGrid}>
+                {parkingZones.map((zone) => {
+                  let availabilityColor = '#10b981';
+                  if (zone.availableSpots === 0) {
+                    availabilityColor = '#ef4444';
+                  } else if (zone.availableSpots < 10) {
+                    availabilityColor = '#f59e0b';
+                  }
+                  
+                  const occupancyRate = (zone.totalSpots - zone.availableSpots) / zone.totalSpots;
+                  
+                  return (
+                    <TouchableOpacity 
+                      key={zone.id}
+                      style={[
+                        styles.zoneCard,
+                        zone.availableSpots === 0 && styles.zoneCardDisabled
+                      ]}
+                      disabled={zone.availableSpots === 0}
+                      onPress={() => {
+                        // Đầu tiên gọi API để lấy chi tiết khu vực
+                        fetchZoneDetails(zone.id);
+                      }}
+                    >
+                      <View style={styles.zoneCardHeader}>
+                        <Text style={styles.zoneName}>{zone.name}</Text>
+                        <View 
                           style={[
-                            styles.availabilityText, 
-                            { color: availabilityColor }
+                            styles.availabilityBadge, 
+                            { backgroundColor: `${availabilityColor}20` }
                           ]}
                         >
-                          {zone.availableSpots > 0 
-                            ? `${zone.availableSpots} chỗ trống`
-                            : "Hết chỗ"
-                          }
+                          <Text 
+                            style={[
+                              styles.availabilityText, 
+                              { color: availabilityColor }
+                            ]}
+                          >
+                            {zone.availableSpots > 0 
+                              ? `${zone.availableSpots} chỗ trống`
+                              : "Hết chỗ"
+                            }
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.occupancyContainer}>
+                        <ProgressBar 
+                          progress={occupancyRate} 
+                          color={availabilityColor} 
+                        />
+                        <Text style={styles.occupancyText}>
+                          {zone.availableSpots}/{zone.totalSpots}
                         </Text>
                       </View>
-                    </View>
-                    <View style={styles.occupancyContainer}>
-                      <ProgressBar 
-                        progress={occupancyRate} 
-                        color={availabilityColor} 
-                      />
-                      <Text style={styles.occupancyText}>
-                        {zone.availableSpots}/{zone.totalSpots}
-                      </Text>
-                    </View>
-                    
-                    {zone.availableSpots > 0 ? (
-                      <View style={styles.viewMapButton}>
-                        <Text style={styles.viewMapText}>Xem sơ đồ</Text>
-                        <Text style={styles.arrowIcon}>→</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.noAvailabilityText}>
-                        Khu vực hiện không có chỗ trống
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                      
+                      {zone.availableSpots > 0 ? (
+                        <View style={styles.viewMapButton}>
+                          <Text style={styles.viewMapText}>Xem sơ đồ</Text>
+                          <Text style={styles.arrowIcon}>→</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.noAvailabilityText}>
+                          Khu vực hiện không có chỗ trống
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
           
           <View style={styles.infoSection}>
@@ -790,6 +1086,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginVertical: 20,
+  },
+  calculateButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  calculateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  priceContainer: {
+    marginTop: 16,
+    backgroundColor: '#ecfdf5',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  priceLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#047857',
+  },
+  priceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#047857',
   },
 });
 

@@ -17,7 +17,8 @@ export type RootStackParamList = {
     zoneId: string,
     totalSpots: number;
     availableSpots: number;
-   };
+    zoneData: string;
+  };
   PaymentScreen: {
     spotId: string;
     bookingCode?: string;

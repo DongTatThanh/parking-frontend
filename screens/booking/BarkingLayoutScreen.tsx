@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -16,182 +16,166 @@ import { RootStackParamList } from '../../Navigation/types';
 
 const { width } = Dimensions.get('window');
 
-type ParkingSpot = {
-  id: string;
-  isAvailable: boolean;
-  isDisabled: boolean;
-  isSelected: boolean;
-};
+interface ParkingSpot {
+  id: number;
+  code: string;
+  status: 'available' | 'occupied' | 'reserved';
+  position: { row: number; col: number };
+}
 
 type ParkingLayoutScreenRouteProp = RouteProp<RootStackParamList, 'BarkingLayoutScreen'>;
 
-const ParkingLayoutScreen: React.FC = () => {
+const BarkingLayoutScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<ParkingLayoutScreenRouteProp>();
-  const { zoneId, totalSpots, availableSpots } = route.params; // Get totalSpots and availableSpots from route params
+  const { zoneId, totalSpots, availableSpots, zoneData } = route.params;
 
-  // Generate spots for the selected zone
-  const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>(
-    Array.from({ length: totalSpots }).map((_, index) => ({
-      id: `${zoneId}${(index + 1).toString().padStart(2, '0')}`,
-      isAvailable: index < availableSpots, // First `availableSpots` are available, rest are occupied
-      isDisabled: false, // You can customize this logic if needed
-      isSelected: false,
-    }))
-  );
+  const [selectedSpot, setSelectedSpot] = useState<ParkingSpot | null>(null);
+  const [spots, setSpots] = useState<ParkingSpot[]>([]);
 
-  // Handle spot selection
-  const handleSpotSelection = (spotId: string) => {
-    const updatedSpots = parkingSpots.map(spot => {
-      if (spot.id === spotId) {
-        if (!spot.isAvailable) {
-          Alert.alert("Không khả dụng", "Vị trí đỗ xe này đã được đặt.");
-          return spot;
-        }
-        return { ...spot, isSelected: !spot.isSelected };
-      } else {
-        return { ...spot, isSelected: false };
+  useEffect(() => {
+    // Parse zoneData from JSON string
+    if (zoneData) {
+      try {
+        const parsedSpots = JSON.parse(zoneData);
+        setSpots(parsedSpots);
+      } catch (error) {
+        console.error('Error parsing spots data:', error);
+        Alert.alert('Lỗi', 'Không thể hiển thị sơ đồ khu vực');
       }
-    });
+    }
+  }, [zoneData]);
 
-    setParkingSpots(updatedSpots);
-  };
-
-  // Get selected spot
-  const selectedSpot = parkingSpots.find(spot => spot.isSelected);
-
-  // Calculate layout rows, columns, and spot size
+  // Tính toán kích thước grid dựa trên số lượng chỗ
   const columns = Math.ceil(Math.sqrt(totalSpots));
   const rows = Math.ceil(totalSpots / columns);
-  const spotSize = Math.min(
-    (Dimensions.get('window').width - 40) / columns - 8, // Adjust for padding and spacing
-    50 // Maximum size for a spot
-  );
+
+  // Xử lý chọn chỗ
+  const handleSpotSelection = (spot: ParkingSpot) => {
+    if (spot.status === 'available') {
+      setSelectedSpot(spot);
+    } else {
+      Alert.alert('Không khả dụng', 'Vị trí này đã được đặt hoặc đang bảo trì.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Sơ đồ khu {zoneId}</Text>
-          <Text style={styles.headerSubtitle}>
-            Chọn vị trí đỗ xe của bạn
-          </Text>
-        </View>
-        <View style={styles.content}>
-          {/* Legend */}
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendIcon, styles.availableIcon]} />
-              <Text style={styles.legendText}>Còn trống</Text>
-            </View>
-            
-            <View style={styles.legendItem}>
-              <View style={[styles.legendIcon, styles.occupiedIcon]} />
-              <Text style={styles.legendText}>Đã đặt</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendIcon, styles.selectedIcon]} />
-              <Text style={styles.legendText}>Đã chọn</Text>
-            </View>
+      
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>← Quay lại</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.headerTitle}>Sơ đồ khu {zoneId}</Text>
+        <Text style={styles.headerSubtitle}>
+          Chỗ trống: {availableSpots}/{totalSpots}
+        </Text>
+      </View>
+      
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
+        {/* Chú thích màu */}
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, styles.availableColor]} />
+            <Text>Còn trống</Text>
           </View>
-          {/* Parking Map */}
-          <View style={styles.parkingMap}>
-            <View style={styles.entranceSign}>
-              <Text style={styles.entranceText}>Lối vào</Text>
-            </View>
-            <View style={styles.parkingGrid}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, styles.occupiedColor]} />
+            <Text>Đã sử dụng</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, styles.reservedColor]} />
+            <Text>Đã đặt trước</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, styles.selectedColor]} />
+            <Text>Đã chọn</Text>
+          </View>
+        </View>
+        
+        {/* Sơ đồ chỗ đỗ xe */}
+        <View style={styles.parkingMap}>
+          <View style={styles.entranceSign}>
+            <Text style={styles.entranceText}>Lối vào</Text>
+          </View>
+          
+          {spots.length > 0 ? (
+            <View style={styles.grid}>
               {Array.from({ length: rows }).map((_, rowIndex) => (
-                <View key={`row-${rowIndex}`} style={styles.parkingRow}>
+                <View key={`row-${rowIndex}`} style={styles.row}>
                   {Array.from({ length: columns }).map((_, colIndex) => {
-                    const spotIndex = rowIndex * columns + colIndex;
-
-                    // Check if spot exists
-                    if (spotIndex >= parkingSpots.length) {
-                      return <View key={`empty-${colIndex}`} style={[styles.emptySpot, { width: spotSize, height: spotSize }]} />;
+                    // Tìm spot ở vị trí này
+                    const spot = spots.find(s => 
+                      s.position.row === rowIndex && s.position.col === colIndex
+                    );
+                    
+                    if (!spot) {
+                      return <View key={`empty-${rowIndex}-${colIndex}`} style={styles.emptySpot} />;
                     }
-
-                    const spot = parkingSpots[spotIndex];
-
+                    
+                    const isSelected = selectedSpot && selectedSpot.id === spot.id;
+                    
                     return (
                       <TouchableOpacity
-                        key={spot.id}
+                        key={`spot-${spot.id}`}
                         style={[
                           styles.parkingSpot,
-                          { width: spotSize, height: spotSize },
-                          !spot.isAvailable && styles.occupiedSpot,
-                          spot.isDisabled && styles.disabledSpot,
-                          spot.isSelected && styles.selectedSpot,
+                          spot.status === 'occupied' && styles.occupiedSpot,
+                          spot.status === 'reserved' && styles.reservedSpot,
+                          isSelected && styles.selectedSpot
                         ]}
-                        onPress={() => handleSpotSelection(spot.id)}
-                        disabled={!spot.isAvailable}
+                        onPress={() => handleSpotSelection(spot)}
+                        disabled={spot.status !== 'available'}
                       >
-                        <Text style={styles.spotLabel}>{spot.id}</Text>
+                        <Text style={styles.spotText}>{spot.code}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
               ))}
             </View>
-          </View>
-          {/* Booking Details */}
-          <View style={styles.bookingDetails}>
-            <Text style={styles.detailsTitle}>Chi tiết đặt chỗ</Text>
-            <View style={styles.detailsRow}>
-              <Text style={styles.detailsLabel}>Khu vực:</Text>
-              <Text style={styles.detailsValue}>Khu {zoneId}</Text>
-            </View>
-            <View style={styles.detailsRow}>
-              <Text style={styles.detailsLabel}>Vị trí:</Text>
-              <Text style={styles.detailsValue}>
-                {selectedSpot ? selectedSpot.id : "Chưa chọn"}
-              </Text>
-            </View>
-            <View style={styles.detailsRow}>
-              <Text style={styles.detailsLabel}>Thời gian:</Text>
-              <Text style={styles.detailsValue}>
-                {new Date().toLocaleDateString()} - 08:00
-              </Text>
-            </View>
-            <View style={styles.detailsRow}>
-              <Text style={styles.detailsLabel}>Giá:</Text>
-              <Text style={styles.detailsValue}>15.000 VND/giờ</Text>
-            </View>
-            <TouchableOpacity 
-              style={[
-                styles.confirmButton,
-                !selectedSpot && styles.confirmButtonDisabled
-              ]}
-              disabled={!selectedSpot}
-              onPress={() => {
-                if (!selectedSpot) {
-                  Alert.alert("Lỗi", "Vui lòng chọn một vị trí trước khi xác nhận.");
-                  return;
-                }
-                navigation.navigate("PaymentScreen", {
-                  spotId: selectedSpot.id, // Ensure selectedSpot is defined
-                  bookingCode: "BC-113",
-                  userName: "Người dùng",
-                  phone: "0123456789",
-                  bookingTime: new Date().toISOString(),
-                  ticketType: "Tiêu chuẩn",
-                  expiryTime: new Date(Date.now() + 3600000).toISOString(),
-                  totalAmount: 5000,
-                });
-              }}
-            >
-              <Text style={styles.confirmButtonText}>
-                {selectedSpot ? "Xác nhận đặt chỗ" : "Vui lòng chọn vị trí"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          ) : (
+            <Text style={styles.noDataText}>Không có dữ liệu chỗ đỗ xe</Text>
+          )}
         </View>
+        
+        {/* Thông tin chỗ đã chọn */}
+        {selectedSpot && (
+          <View style={styles.selectedSpotInfo}>
+            <Text style={styles.selectedSpotTitle}>Chỗ đỗ xe đã chọn</Text>
+            <Text style={styles.selectedSpotText}>
+              Mã chỗ: {selectedSpot.code}
+            </Text>
+            <Text style={styles.selectedSpotText}>
+              Trạng thái: {selectedSpot.status === 'available' ? 'Có thể đặt' : 'Không khả dụng'}
+            </Text>
+          </View>
+        )}
+        
+        <TouchableOpacity
+          style={[
+            styles.confirmButton,
+            !selectedSpot && styles.disabledButton
+          ]}
+          disabled={!selectedSpot}
+          onPress={() => {
+            if (selectedSpot) {
+              navigation.navigate('BookingScreen', {
+                selectedSpotId: selectedSpot.id, 
+                selectedZoneId: zoneId
+              });
+            }
+          }}
+        >
+          <Text style={styles.confirmButtonText}>
+            {selectedSpot ? 'Xác nhận chọn chỗ này' : 'Vui lòng chọn một chỗ đỗ xe'}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -204,11 +188,10 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 16,
-    paddingTop: 8,
     backgroundColor: '#fff',
   },
   backButton: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   backButtonText: {
     fontSize: 16,
@@ -217,101 +200,85 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 4,
     color: '#333',
   },
   headerSubtitle: {
     fontSize: 16,
     color: '#666',
+    marginTop: 4,
   },
-  content: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
     padding: 16,
   },
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
+    marginBottom: 16,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '50%',
     marginBottom: 8,
-    width: '48%',
   },
-  legendIcon: {
+  legendColor: {
     width: 16,
     height: 16,
-    borderRadius: 4,
     marginRight: 8,
+    borderRadius: 4,
   },
-  availableIcon: {
+  availableColor: {
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#10b981',
   },
-  occupiedIcon: {
+  occupiedColor: {
     backgroundColor: '#d1d5db',
   },
-  disabledIcon: {
-    backgroundColor: '#3b82f6',
+  reservedColor: {
+    backgroundColor: '#fcd34d',
   },
-  selectedIcon: {
+  selectedColor: {
     backgroundColor: '#10b981',
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#555',
   },
   parkingMap: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: 16,
   },
   entranceSign: {
     backgroundColor: '#3b82f6',
     alignSelf: 'center',
-    paddingHorizontal: 20,
     paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 4,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   entranceText: {
     color: '#fff',
     fontWeight: '600',
   },
-  parkingGrid: {
+  grid: {
     alignItems: 'center',
   },
-  parkingRow: {
+  row: {
     flexDirection: 'row',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   parkingSpot: {
+    width: 50,
+    height: 50,
+    margin: 4,
     borderWidth: 1,
     borderColor: '#10b981',
     borderRadius: 4,
-    margin: 4,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
@@ -320,55 +287,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#d1d5db',
     borderColor: '#d1d5db',
   },
-  disabledSpot: {
-    backgroundColor: '#fff',
-    borderColor: '#3b82f6',
+  reservedSpot: {
+    backgroundColor: '#fcd34d',
+    borderColor: '#f59e0b',
   },
   selectedSpot: {
     backgroundColor: '#10b981',
     borderColor: '#10b981',
   },
-  spotLabel: {
+  emptySpot: {
+    width: 50,
+    height: 50,
+    margin: 4,
+  },
+  spotText: {
     fontSize: 12,
     fontWeight: '500',
   },
-  emptySpot: {
-    backgroundColor: 'transparent',
+  noDataText: {
+    textAlign: 'center',
+    marginVertical: 20,
+    color: '#666',
   },
-  bookingDetails: {
+  selectedSpotInfo: {
     backgroundColor: '#f1f5f9',
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
+    marginBottom: 16,
   },
-  detailsTitle: {
+  selectedSpotTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: 8,
     color: '#333',
   },
-  detailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  detailsLabel: {
-    fontSize: 15,
+  selectedSpotText: {
+    fontSize: 16,
+    marginBottom: 4,
     color: '#555',
   },
-  detailsValue: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#333',
-  },
   confirmButton: {
-    backgroundColor: '#000',
+    backgroundColor: '#3b82f6',
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 8,
   },
-  confirmButtonDisabled: {
-    backgroundColor: '#d1d5db',
+  disabledButton: {
+    backgroundColor: '#93c5fd',
   },
   confirmButtonText: {
     color: '#fff',
@@ -377,4 +343,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ParkingLayoutScreen;
+export default BarkingLayoutScreen;
