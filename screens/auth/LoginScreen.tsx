@@ -3,8 +3,8 @@ import React, { useState, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BackButton } from '../../components/common/BackButton';
 import { useNavigation } from '@react-navigation/native';
-import axios from 'axios';
 import { UserContext } from "../../context/UserContext";
+import api from '../../api/axiosConfig';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
@@ -31,7 +31,9 @@ const LoginScreen = () => {
     setLoading(true);
     
     try {
-      const response = await axios.post('http://192.168.0.101:3000/api/auth/login', {
+      console.log('Attempting login with:', { username, password });
+      
+      const response = await api.post('/auth/login', {
         username: username,
         password: password
       });
@@ -50,43 +52,37 @@ const LoginScreen = () => {
           setUser(response.data.user);
         }
         
-        navigation.navigate('TabNavigator' as never);
         Alert.alert(
           'Thành công',
           'Đăng nhập thành công!',
           [{ text: 'OK', onPress: () => navigation.navigate('TabNavigator' as never) }]
         );
       } else {
+        Alert.alert('Lỗi', response.data.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      if (error.response) {
-        console.log('Error details:', error.response.data);
-        
-        // Kiểm tra nội dung lỗi từ response
-        const errorMessage = error.response.data.error || error.response.data.message;
-        
-        if (errorMessage) {
-          if (errorMessage.includes('Incorrect password')) {
-            Alert.alert('Lỗi đăng nhập', 'Mật khẩu không chính xác');
-          } 
-          else if (errorMessage.includes('User not found') || errorMessage.includes('Email not found')) {
-            Alert.alert('Lỗi đăng nhập', 'Email hoặc số điện thoại chưa được đăng ký');
-          }
-          else if (errorMessage.includes('Account is locked')) {
-            Alert.alert('Lỗi đăng nhập', 'Tài khoản đã bị khóa');
-          }
-          else {
-            // Hiển thị thông báo lỗi trực tiếp từ server
-            Alert.alert('Lỗi đăng nhập', errorMessage);
-          }
-        } else {
-          Alert.alert('Lỗi', 'Đăng nhập thất bại. Vui lòng thử lại.');
-        }
-      } else if (error.request) {
-        Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.');
+      
+      if (error.message.includes('Không thể kết nối đến máy chủ')) {
+        Alert.alert(
+          'Lỗi kết nối',
+          'Không thể kết nối đến máy chủ. Vui lòng kiểm tra:\n\n' +
+          '1. Máy chủ đã được khởi động\n' +
+          '2. Địa chỉ IP và cổng chính xác\n' +
+          '3. Kết nối mạng của bạn'
+        );
+      } else if (error.message.includes('Tài khoản không tồn tại')) {
+        Alert.alert(
+          'Lỗi đăng nhập',
+          'Tài khoản không tồn tại. Vui lòng kiểm tra lại email hoặc số điện thoại.'
+        );
+      } else if (error.message.includes('Mật khẩu không đúng')) {
+        Alert.alert(
+          'Lỗi đăng nhập',
+          'Mật khẩu không đúng. Vui lòng kiểm tra lại.'
+        );
       } else {
-        Alert.alert('Lỗi', 'Đã xảy ra lỗi trong quá trình đăng nhập. Vui lòng thử lại.');
+        Alert.alert('Lỗi đăng nhập', error.message);
       }
     } finally {
       setLoading(false);

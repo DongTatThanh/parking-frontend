@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, A
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { appColor } from '../../constants/appColors';
-import axios from 'axios';
 import { Alert } from 'react-native';
+import api from '../../api/axiosConfig';
 
 const RegisterScreen = () => {
   const navigation = useNavigation();
@@ -77,12 +77,11 @@ const RegisterScreen = () => {
         password: formData.password,
         username: formData.email, // Có thể server yêu cầu username
         role: "user" // Có thể server yêu cầu role
-        // Thêm các trường khác nếu cần
       };
       
       console.log('Sending registration data:', userData);
       
-      const response = await axios.post('http://192.168.0.101/api/auth/register', userData);
+      const response = await api.post('/auth/register', userData);
       
       console.log('Registration response:', response.data);
       
@@ -97,27 +96,17 @@ const RegisterScreen = () => {
       }
     } catch (error: any) {
       console.error('Registration error:', error);
-      if (error.response) {
-        console.log('Error details:', error.response.data);
-        
-        // Bắt lỗi số điện thoại trùng lặp
-        if (error.response.data.error && error.response.data.error.includes('Duplicate entry') && error.response.data.error.includes('phone')) {
-          Alert.alert('Lỗi', 'Số điện thoại này đã được đăng ký. Vui lòng sử dụng số điện thoại khác.');
-        } 
-        // Bắt lỗi email trùng lặp
-        else if (error.response.data.error && error.response.data.error.includes('Duplicate entry') && error.response.data.error.includes('email')) {
-          Alert.alert('Lỗi', 'Email này đã được đăng ký. Vui lòng sử dụng email khác.');
-        }
-        // Các lỗi khác
-        else {
-          Alert.alert('Lỗi', error.response.data.message || error.response.data.error || 'Đăng ký thất bại. Vui lòng thử lại.');
-        }
-      } else if (error.request) {
-        // No response received
-        Alert.alert('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.');
+      
+      if (error.message.includes('Không thể kết nối đến máy chủ')) {
+        Alert.alert(
+          'Lỗi kết nối',
+          'Không thể kết nối đến máy chủ. Vui lòng kiểm tra:\n\n' +
+          '1. Máy chủ đã được khởi động\n' +
+          '2. Địa chỉ IP và cổng chính xác\n' +
+          '3. Kết nối mạng của bạn'
+        );
       } else {
-        // Other error
-        Alert.alert('Lỗi', 'Đã xảy ra lỗi trong quá trình đăng ký. Vui lòng thử lại.');
+        Alert.alert('Lỗi đăng ký', error.message);
       }
     } finally {
       setLoading(false);

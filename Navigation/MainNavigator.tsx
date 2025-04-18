@@ -6,6 +6,7 @@ import { HomeScreen, LoginScreen } from '@/screens';
 import ServicesScreen from '@/screens/booking/ServicesScreen';
 import BookingScreen from '@/screens/booking/BookingScreen';
 import BarkingLayoutScreen from '@/screens/booking/BarkingLayoutScreen';
+import PaymentScreen from '@/screens/booking/PaymentScreen';
 
 import BookingConfirmationScreen from '@/screens/booking/BookingConfirmationScreen';
 import HistoryScreen from '@/screens/screenBottomTab/HistoryScreen';
@@ -13,7 +14,6 @@ import HistoryScreen from '@/screens/screenBottomTab/HistoryScreen';
 import InsuranceScreen from '@/screens/InsuranceScreen';
 import AboutScreen from '@/screens/AboutScreen';
 import SpecialOffersScreen from '@/screens/SpecialOffersScreen';
-import PaymentScreen from '@/screens/PaymentScreen';
 import ChooseTime from "../screens/booking/ChooseTime";
 
 const Stack = createStackNavigator();
