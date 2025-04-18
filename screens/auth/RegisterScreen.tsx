@@ -82,7 +82,7 @@ const RegisterScreen = () => {
       
       console.log('Sending registration data:', userData);
       
-      const response = await axios.post('http://192.168.0.101:3000/api/auth/register', userData);
+      const response = await axios.post('http://192.168.0.101/api/auth/register', userData);
       
       console.log('Registration response:', response.data);
       

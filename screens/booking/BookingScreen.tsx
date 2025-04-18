@@ -16,16 +16,19 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import api from '../../api/booking';
+import BarkingLayoutScreen from './BarkingLayoutScreen';
 
 const { width } = Dimensions.get('window');
 
 // Định nghĩa các interface
 interface ParkingZone {
-  id: string;
+  id: number;
   name: string;
   totalSpots: number;
   availableSpots: number;
+  address?: string;
+  parkingLotName?: string;
 }
 
 interface ParkingSpot {
@@ -46,6 +49,63 @@ interface PriceResponse {
     discounts?: { name: string; amount: number }[];
     taxes?: { name: string; amount: number }[];
   };
+}
+interface check_license_plate{
+  licensePlate: string;
+  userId: number;
+
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data: T;
+}
+
+interface ZoneDetailsResponse {
+  id: number;
+  name: string;
+  totalSpots: number;
+  availableSpots: number;
+  slots: Array<{
+    id: number;
+    code: string;
+    status?: string;
+    position_x: number;
+    position_y: number;
+  }>;
+}
+
+interface PriceCalculationResponse {
+  totalPrice: number;
+  currency: string;
+  details?: {
+    basePrice: number;
+    taxes?: number;
+    discounts?: number;
+  };
+}
+
+interface BookingResponse {
+  bookingId: string;
+  status: string;
+  totalPrice: number;
+  currency: string;
+  startTime: string;
+  endTime: string;
+  parkingZone: {
+    id: number;
+    name: string;
+  };
+  slot: {
+    id: number;
+    code: string;
+  };
+}
+
+interface LicensePlateCheckResponse {
+  isValid: boolean;
+  message?: string;
 }
 
 // Progress bar component
@@ -96,46 +156,24 @@ const BookingScreen: React.FC = () => {
   // Thêm hàm fetchParkingZones
   const fetchParkingZones = async () => {
     try {
-      console.log('Đang gọi API lấy danh sách khu vực đỗ xe...');
-      // API endpoint phải khớp với bookingController.getParkingZones
-      const response = await axios.get('http://192.168.0.101:3000/api/bookings/zones');
+      setLoading(true);
+      console.log('Đang gọi API lấy danh sách khu vực đỗ xe');
       
-      console.log('API Response:', response.data);
+      const response = await api.get<ApiResponse<ParkingZone[]>>('/bookings/zones');
       
-      if (response.data && response.data.success) {
-        // Map dữ liệu từ API theo cấu trúc database
-        const mappedZones = response.data.data.map((zone: any) => ({
-          id: zone.zone_id.toString(),
-          name: zone.zone_name,
-          totalSpots: zone.total_slots, 
-          availableSpots: zone.available_slots
-        }));
-        
-        setParkingZones(mappedZones);
+      if (response.data.success && response.data.data) {
+        setParkingZones(response.data.data);
       } else {
-        throw new Error('API trả về dữ liệu không hợp lệ');
+        throw new Error(response.data.message || 'Không thể tải danh sách khu vực đỗ xe');
       }
-    } catch (error) {
-      console.error('Lỗi khi lấy danh sách khu vực đỗ xe:', error);
-      // Hiển thị thông báo lỗi chi tiết hơn
-      const errorMessage = error.response ? 
-        `Lỗi ${error.response.status}: ${error.response.data?.message || 'Không thể kết nối đến server'}` :
-        'Không thể kết nối đến server, vui lòng kiểm tra kết nối mạng';
-      
-      Alert.alert(
-        'Lỗi kết nối API', 
-        errorMessage,
-        [
-          {text: 'Thử lại', onPress: fetchParkingZones},
-          {text: 'Dùng dữ liệu mẫu', onPress: () => {
-            setParkingZones([
-              { id: "1", name: "Khu A", totalSpots: 30, availableSpots: 28 },
-              { id: "2", name: "Khu B", totalSpots: 20, availableSpots: 19 },
-              { id: "3", name: "Khu C", totalSpots: 25, availableSpots: 24 }
-            ]);
-          }}
-        ]
-      );
+    } catch (error: any) {
+      console.error('Lỗi khi lấy danh sách khu vực:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tải danh sách khu vực đỗ xe');
+      // Use sample data as fallback
+      setParkingZones([
+        { id: 1, name: 'Khu A', totalSpots: 50, availableSpots: 30 },
+        { id: 2, name: 'Khu B', totalSpots: 40, availableSpots: 25 },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -383,81 +421,58 @@ const BookingScreen: React.FC = () => {
     </View>
   );
 
-  const fetchZoneDetails = async (zoneId: string) => {
+  const fetchZoneDetails = async (zoneId: number | string) => {
     try {
       setLoading(true);
       console.log('Đang gọi API lấy chi tiết khu vực:', zoneId);
       
-      // API endpoint phải khớp với bookingController.getZoneDetails
-      const response = await axios.get(`http://192.168.0.101:3000/api/bookings/zones/${zoneId}`);
+      const response = await api.get<ApiResponse<ZoneDetailsResponse>>(`/bookings/zones/${zoneId}`);
       
-      console.log('Zone details response:', response.data);
-      
-      if (response.data && response.data.success) {
-        // Map dữ liệu từ API response
+      if (response.data.success && response.data.data) {
         const zoneData = response.data.data;
-        const mappedSlots = zoneData.slots ? zoneData.slots.map((slot: any) => ({
-          id: slot.slot_id,
-          code: slot.slot_code,
-          status: slot.status,
-          position: {
-            row: slot.position_x,
-            col: slot.position_y
-          }
-        })) : [];
         
-        // Sửa navigation để phù hợp với RootStackParamList
+        // Map the slots data to the expected format
+        const mappedSlots = zoneData.slots.map(slot => ({
+          id: slot.id || 0,
+          code: slot.code || '',
+          status: slot.status || 'available',
+          position: {
+            row: slot.position_x || 0,
+            col: slot.position_y || 0
+          }
+        }));
+
         navigation.navigate('BarkingLayoutScreen', { 
-          zoneId,
-          totalSpots: zoneData.total_slots || 0,
-          availableSpots: zoneData.available_slots || 0,
+          zoneId: zoneData.id.toString(),
+          totalSpots: zoneData.totalSpots,
+          availableSpots: zoneData.availableSpots,
           zoneData: JSON.stringify(mappedSlots)
         });
       } else {
-        throw new Error('API trả về dữ liệu không hợp lệ');
+        throw new Error(response.data.message || 'API trả về dữ liệu không hợp lệ');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Lỗi khi lấy chi tiết khu vực ${zoneId}:`, error);
       Alert.alert(
-        'Lỗi', 
-        'Không thể tải thông tin chi tiết khu vực. Vui lòng thử lại sau.',
-        [{text: 'OK'}]
+        'Lỗi',
+        error.message || 'Không thể tải thông tin chi tiết khu vực. Vui lòng thử lại sau.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const checkLicensePlate = async () => {
-    if (!validateLicensePlate(licensePlate)) {
-      Alert.alert('Lỗi', 'Biển số xe không hợp lệ');
-      return false;
-    }
-
+  const checkLicensePlate = async (licensePlate: string) => {
     try {
-      console.log('Kiểm tra biển số xe:', licensePlate);
-      // Lấy thông tin user
-      const userData = await AsyncStorage.getItem('user');
-      const user = userData ? JSON.parse(userData) : null;
-      const userId = user?.id || 1;
+      const response = await api.get<ApiResponse<LicensePlateCheckResponse>>(`/validate/license-plate/${licensePlate}`);
       
-      // API theo bookingController.checkLicensePlate
-      const response = await axios.post('http://192.168.0.101:3000/api/bookings/check-license-plate', {
-        licensePlate,
-        userId
-      });
-      
-      console.log('Check license plate response:', response.data);
-      
-      if (response.data && response.data.success) {
-        return true;
-      } else {
-        Alert.alert('Thông báo', response.data.message || 'Biển số xe không hợp lệ');
-        return false;
+      if (response.data.success && response.data.data) {
+        return response.data.data.isValid;
       }
+      return false;
     } catch (error) {
       console.error('Lỗi khi kiểm tra biển số xe:', error);
-      Alert.alert('Lỗi', 'Không thể kiểm tra biển số xe. Vui lòng thử lại sau.');
       return false;
     }
   };
@@ -470,9 +485,7 @@ const BookingScreen: React.FC = () => {
 
     try {
       setLoading(true);
-      console.log('Tính giá vé với thông tin:', activeTab, dailyBookingDate, dailyStartTime, dailyEndTime);
       
-      // Định dạng thời gian đúng cho API
       const startDateTime = activeTab === 'daily' 
         ? `${dailyBookingDate} ${dailyStartTime}` 
         : monthlyStartDate;
@@ -481,36 +494,29 @@ const BookingScreen: React.FC = () => {
         ? `${dailyBookingDate} ${dailyEndTime}`
         : monthlyEndDate;
       
-      // Tham số đúng với bookingController.calculateBookingPrice
       const params = {
-        lotId: 1, // Mặc định bãi đỗ xe 1
-        bookingType: activeTab, // 'daily' hoặc 'monthly' 
+        lotId: 1,
+        bookingType: activeTab,
         startTime: startDateTime,
         endTime: endDateTime
       };
       
-      const response = await axios.post(
-        'http://192.168.0.101:3000/api/bookings/calculate-price',
-        params
-      );
+      const response = await api.post<ApiResponse<PriceCalculationResponse>>('/calculate-price', params);
       
-      console.log('Calculate price response:', response.data);
-      
-      if (response.data && response.data.success) {
-        // Cập nhật state với thông tin giá
+      if (response.data.success && response.data.data) {
         setPriceInfo({
           price: response.data.data.totalPrice,
-          currency: 'VND',
+          currency: response.data.data.currency,
           priceDetails: {
-            basePrice: response.data.data.pricePerUnit
+            basePrice: response.data.data.totalPrice
           }
         });
       } else {
-        throw new Error(response.data.message || 'Tính giá thất bại');
+        throw new Error(response.data.message || 'Không thể tính giá');
       }
-    } catch (error) {
-      console.error('Lỗi khi tính giá vé:', error);
-      Alert.alert('Lỗi', 'Không thể tính giá vé. Vui lòng thử lại sau.');
+    } catch (error: any) {
+      console.error('Lỗi khi tính giá:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tính giá. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
@@ -522,22 +528,18 @@ const BookingScreen: React.FC = () => {
       return;
     }
 
-    // Kiểm tra biển số xe hợp lệ không
-    const isLicensePlateValid = await checkLicensePlate();
+    const isLicensePlateValid = await checkLicensePlate(licensePlate);
     if (!isLicensePlateValid) {
       return;
     }
 
     try {
       setLoading(true);
-      console.log('Tạo booking với thông tin:', activeTab, slotId, zoneId);
       
-      // Lấy user_id từ AsyncStorage
       const userData = await AsyncStorage.getItem('user');
       const user = userData ? JSON.parse(userData) : null;
       const userId = user?.id || 1;
       
-      // Định dạng thời gian đúng
       const startDateTime = activeTab === 'daily' 
         ? `${dailyBookingDate} ${dailyStartTime}:00`
         : `${monthlyStartDate} 00:00:00`;
@@ -546,35 +548,30 @@ const BookingScreen: React.FC = () => {
         ? `${dailyBookingDate} ${dailyEndTime}:00`
         : `${monthlyEndDate} 23:59:59`;
       
-      // Dữ liệu booking theo controller
       const bookingData = {
-        userId: userId,
-        lotId: 1, // Mặc định bãi đỗ xe 1
-        slotId: slotId,
-        priceId: 1, // Lấy từ response của calculatePrice
+        userId,
+        lotId: 1,
+        slotId,
+        priceId: 1,
         bookingType: activeTab,
         startTime: startDateTime,
         endTime: endDateTime,
-        licensePlate: licensePlate,
-        phoneNumber: phoneNumber
+        licensePlate,
+        phoneNumber
       };
       
-      console.log('Sending booking data:', bookingData);
+      const response = await api.post<ApiResponse<BookingResponse>>('/bookings', bookingData);
       
-      const response = await axios.post('http://192.168.0.101:3000/api/bookings', bookingData);
-      
-      console.log('Create booking response:', response.data);
-      
-      if (response.data && response.data.success) {
-        Alert.alert(
-          'Thành công',
-          `Đã đặt chỗ thành công. Mã đặt chỗ: ${response.data.data.bookingId}`,
-          [{ text: 'OK', onPress: () => navigation.navigate('HomeScreen') }]
-        );
+      if (response.data.success) {
+        Alert.alert('Success', `Booking created successfully! Booking ID: ${response.data.data.bookingId}`);
+        // Reset form and navigate
+        setLicensePlate('');
+        setPhoneNumber('');
+        navigation.navigate('HomeScreen');
       } else {
-        throw new Error(response.data.message || 'Đặt chỗ thất bại');
+        Alert.alert('Error', response.data.message || 'Failed to create booking');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Lỗi khi tạo booking:', error);
       Alert.alert('Lỗi', 'Không thể đặt chỗ. Vui lòng thử lại sau.');
     } finally {
@@ -1122,7 +1119,7 @@ const styles = StyleSheet.create({
   },
   priceValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '700',      
     color: '#047857',
   },
 });
