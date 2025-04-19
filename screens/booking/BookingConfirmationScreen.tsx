@@ -23,6 +23,7 @@ const BookingConfirmationScreen: React.FC = () => {
     bookingCode,
     userName,
     phone,
+    monthlyStartDate,
     bookingTime, 
     ticketType,
     expiryTime,

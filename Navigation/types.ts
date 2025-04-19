@@ -26,6 +26,7 @@ export type RootStackParamList = {
     zoneData: string;
     pricePerHour?: number;
     bookingDate?: string;
+    monthlyStartDate?: string;
     startTime?: string;
     endTime?: string;
     duration?: string;

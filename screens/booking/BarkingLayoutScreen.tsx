@@ -15,6 +15,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../../api/booking';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +24,12 @@ interface ParkingSpot {
   code: string;
   status: 'available' | 'occupied' | 'reserved';
   position: { row: number; col: number };
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data: T;
 }
 
 type ParkingLayoutScreenRouteProp = RouteProp<RootStackParamList, 'BarkingLayoutScreen'>;
@@ -37,6 +44,7 @@ const BarkingLayoutScreen: React.FC = () => {
     zoneData,
     pricePerHour = 8000,
     bookingDate = '',
+    monthlyStartDate = '',
     startTime = '',
     endTime = '',
     duration = '',
@@ -102,7 +110,56 @@ const BarkingLayoutScreen: React.FC = () => {
       setIsLoading(true);
 
       try {
-        // Chuyển thẳng về màn hình booking với action proceed_to_payment và giá cho vị trí đỗ xe
+        console.log('Tạo booking với thông tin:', {
+          spotId: selectedSpot.id,
+          zoneId: zoneId,
+          bookingDate: bookingDate,
+          startTime: startTime,
+          endTime: endTime,
+          totalPrice: spotPrice
+        });
+
+        // Tạo booking trước khi chuyển đến màn hình thanh toán
+        const response = await api.post<ApiResponse<{ bookingId: string }>>('/bookings/create', {
+          spotId: selectedSpot.id,
+          zoneId: zoneId,
+          bookingDate: bookingDate,
+          startTime: startTime,
+          endTime: endTime,
+          duration: duration,
+          spotCode: selectedSpot.code,
+          totalPrice: spotPrice,
+          currency: 'VND',
+          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily',
+        });
+
+        console.log('Response từ API tạo booking:', response);
+
+        if (!response.success) {
+          throw new Error(response.message || 'Không thể tạo đặt chỗ');
+        }
+
+        // Nhận bookingId từ API
+        const bookingData = response.data;
+        
+        // Chuyển đến màn hình thanh toán với bookingId
+        navigation.navigate('PaymentScreen', {
+          bookingId: bookingData.data.bookingId,
+          totalPrice: spotPrice,
+          currency: 'VND',
+          spotCode: selectedSpot.code,
+          zoneId: zoneId,
+          bookingDate: bookingDate,
+          startTime: startTime,
+          endTime: endTime,
+          duration: duration,
+          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily'
+        });
+      } catch (error) {
+        console.error('Error creating booking:', error);
+        Alert.alert('Lỗi', 'Không thể tạo đặt chỗ. Vui lòng thử lại.');
+        
+        // Nếu lỗi, vẫn chuyển đến màn hình booking để xử lý theo luồng cũ
         navigation.navigate('BookingScreen', {
           selectedSpotId: selectedSpot.id, 
           selectedZoneId: zoneId,
@@ -110,9 +167,6 @@ const BarkingLayoutScreen: React.FC = () => {
           action: 'proceed_to_payment',
           pricePerSpot: spotPrice
         });
-      } catch (error) {
-        console.error('Error confirming spot selection:', error);
-        Alert.alert('Lỗi', 'Không thể xác nhận chỗ đặt. Vui lòng thử lại.');
       } finally {
         setIsLoading(false);
       }
@@ -146,6 +200,9 @@ const BarkingLayoutScreen: React.FC = () => {
           <View style={styles.bookingInfoContainer}>
             <Text style={styles.bookingInfoText}>
               Ngày: {bookingDate} • Thời gian: {startTime} - {endTime}
+            </Text>
+            <Text style={styles.bookingInfoText}>
+              ngày hết hạn {monthlyStartDate}
             </Text>
             <Text style={styles.bookingInfoText}>
               Thời lượng: {duration}
