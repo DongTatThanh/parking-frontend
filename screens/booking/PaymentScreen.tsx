@@ -19,7 +19,20 @@ const PaymentScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<PaymentScreenRouteProp>();
   
-  const { bookingId, totalPrice, currency, spotCode, zoneId } = route.params;
+  const { 
+    bookingId, 
+    totalPrice, 
+    currency, 
+    spotCode, 
+    zoneId,
+    bookingDate,
+    startTime,
+    endTime,
+    duration,
+    bookingType,
+    licensePlate,
+    phoneNumber
+  } = route.params;
   
   const handlePaymentMethod = (method: string) => {
     // Ở đây sẽ xử lý thanh toán thật, nhưng hiện tại chỉ hiển thị thông báo
@@ -59,12 +72,42 @@ const PaymentScreen: React.FC = () => {
             <Text style={styles.infoValue}>{bookingId}</Text>
           </View>
           <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Loại vé:</Text>
+            <Text style={styles.infoValue}>{bookingType === 'daily' ? 'Vé ngày' : 'Vé tháng'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Ngày đặt:</Text>
+            <Text style={styles.infoValue}>{bookingDate || 'Không có thông tin'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Thời gian:</Text>
+            <Text style={styles.infoValue}>{startTime || '00:00'} - {endTime || '23:59'}</Text>
+          </View>
+          {duration && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Thời lượng:</Text>
+              <Text style={styles.infoValue}>{duration}</Text>
+            </View>
+          )}
+          <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Vị trí:</Text>
             <Text style={styles.infoValue}>{spotCode}, Khu {zoneId}</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Tổng tiền:</Text>
-            <Text style={styles.infoValue}>{totalPrice.toLocaleString()} {currency}</Text>
+          {licensePlate && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Biển số xe:</Text>
+              <Text style={styles.infoValue}>{licensePlate}</Text>
+            </View>
+          )}
+          {phoneNumber && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Số điện thoại:</Text>
+              <Text style={styles.infoValue}>{phoneNumber}</Text>
+            </View>
+          )}
+          <View style={styles.totalPriceRow}>
+            <Text style={styles.totalPriceLabel}>Tổng tiền:</Text>
+            <Text style={styles.totalPriceValue}>{totalPrice.toLocaleString()} {currency}</Text>
           </View>
         </View>
         
@@ -189,6 +232,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: '#333',
+  },
+  totalPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  totalPriceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalPriceValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#047857',
   },
   sectionTitle: {
     fontSize: 18,

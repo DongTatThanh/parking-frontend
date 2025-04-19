@@ -36,7 +36,21 @@ instance.interceptors.response.use(
 
     // Kiểm tra cấu trúc response
     if (response.data && typeof response.data === 'object') {
-      // Nếu response có cấu trúc { success, data }
+      // Xử lý đặc biệt cho API đăng nhập/đăng ký
+      if (response.config.url?.includes('/auth/login') || response.config.url?.includes('/auth/register')) {
+        // Kiểm tra nếu response.data chứa user và token (đăng nhập thành công)
+        if (response.data.user && response.data.token) {
+          return response.data;
+        }
+        // Kiểm tra nếu response.data chứa success và message (đăng ký thành công)
+        if ('success' in response.data) {
+          return response.data;
+        }
+        // Nếu không có các trường trên, có thể là lỗi
+        throw new Error(response.data.message || 'Đăng nhập/đăng ký thất bại');
+      }
+
+      // Xử lý các API khác
       if ('success' in response.data) {
         if (response.data.success) {
           return response.data;
@@ -44,7 +58,6 @@ instance.interceptors.response.use(
           throw new Error(response.data.message || 'Yêu cầu thất bại');
         }
       }
-      // Nếu response là data trực tiếp
       return response.data;
     }
     

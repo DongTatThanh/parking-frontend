@@ -6,6 +6,23 @@ import { useNavigation } from '@react-navigation/native';
 import { UserContext } from "../../context/UserContext";
 import api from '../../api/axiosConfig';
 
+// Định nghĩa kiểu dữ liệu cho response login
+interface LoginResponse {
+  success: boolean;
+  message: string;
+  data: {
+    token: string;
+    user: {
+      user_id: number;
+      username: string;
+      full_name: string;
+      email: string;
+      phone: string;
+      role: string;
+    };
+  };
+}
+
 const LoginScreen = () => {
   const navigation = useNavigation();
   const setUser = (userData: any) => {
@@ -31,34 +48,35 @@ const LoginScreen = () => {
     setLoading(true);
     
     try {
-      console.log('Attempting login with:', { username, password });
+      console.log('Đang xử lý đăng nhập với:', { username, password });
       
-      const response = await api.post('/auth/login', {
-        username: username,
+      const response = await api.post<any, LoginResponse>('/auth/login', {
+        username: username.toLowerCase(),
         password: password
       });
       
-      console.log('Login response:', response.data);
+      console.log('Response từ API đăng nhập:', response);
     
-      if (response.data && response.data.success) {
+      // Kiểm tra response theo cấu trúc từ backend
+      if (response.success && response.data?.token && response.data?.user) {
+        console.log('Đăng nhập thành công với user:', response.data.user);
+        
         // Lưu token vào AsyncStorage
-        if (response.data.token) {
-          await AsyncStorage.setItem('userToken', response.data.token);
-        }
+        await AsyncStorage.setItem('userToken', response.data.token);
         
         // Lưu và cập nhật thông tin người dùng vào context
-        if (response.data.user) {
-          await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-          setUser(response.data.user);
-        }
+        await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+        setUser(response.data.user);
         
         Alert.alert(
           'Thành công',
-          'Đăng nhập thành công!',
+          response.message || 'Đăng nhập thành công!',
           [{ text: 'OK', onPress: () => navigation.navigate('TabNavigator' as never) }]
         );
       } else {
-        Alert.alert('Lỗi', response.data.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
+        // Log chi tiết về response để debug
+        console.error('Response không hợp lệ:', response);
+        Alert.alert('Lỗi', response.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
       }
     } catch (error: any) {
       console.error('Login error:', error);

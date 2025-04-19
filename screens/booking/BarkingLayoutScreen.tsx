@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from './BookingScreen';
+import { RootStackParamList } from '../../Navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -30,13 +30,25 @@ type ParkingLayoutScreenRouteProp = RouteProp<RootStackParamList, 'BarkingLayout
 const BarkingLayoutScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<ParkingLayoutScreenRouteProp>();
-  const { zoneId, totalSpots, availableSpots, zoneData } = route.params;
+  const { 
+    zoneId, 
+    totalSpots, 
+    availableSpots, 
+    zoneData,
+    pricePerHour = 8000,
+    bookingDate = '',
+    startTime = '',
+    endTime = '',
+    duration = '',
+    totalPrice = 0
+  } = route.params;
 
   const [selectedSpot, setSelectedSpot] = useState<ParkingSpot | null>(null);
   const [spots, setSpots] = useState<ParkingSpot[]>([]);
   const [maxRows, setMaxRows] = useState(0);
   const [maxCols, setMaxCols] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [spotPrice, setSpotPrice] = useState(totalPrice);
 
   useEffect(() => {
     // Parse zoneData from JSON string
@@ -73,6 +85,12 @@ const BarkingLayoutScreen: React.FC = () => {
   const handleSpotSelection = (spot: ParkingSpot) => {
     if (spot.status === 'available') {
       setSelectedSpot(spot);
+      
+      // Tính giá cho vị trí cụ thể (có thể thay đổi dựa trên vị trí - ví dụ có thể có các vị trí VIP đắt hơn)
+      // Đây chỉ là ví dụ - trong thực tế bạn có thể thay đổi logic này
+      const positionMultiplier = 1 + (spot.position.row * 0.05); // Hàng càng xa càng đắt
+      const calculatedPrice = Math.ceil(totalPrice * positionMultiplier / 1000) * 1000;
+      setSpotPrice(calculatedPrice);
     } else {
       Alert.alert('Không khả dụng', 'Vị trí này đã được đặt hoặc đang bảo trì.');
     }
@@ -84,27 +102,26 @@ const BarkingLayoutScreen: React.FC = () => {
       setIsLoading(true);
 
       try {
-        // Kiểm tra xem đã có thông tin biển số xe và SĐT từ AsyncStorage chưa
-        const licensePlateConfirmed = await AsyncStorage.getItem('booking_license_plate_confirmed');
-        const phoneNumberConfirmed = await AsyncStorage.getItem('booking_phone_number_confirmed');
-        
-        console.log('License plate confirmed:', licensePlateConfirmed);
-        console.log('Phone number confirmed:', phoneNumberConfirmed);
-
-        // Chuyển về màn hình booking với action proceed_to_payment
+        // Chuyển thẳng về màn hình booking với action proceed_to_payment và giá cho vị trí đỗ xe
         navigation.navigate('BookingScreen', {
           selectedSpotId: selectedSpot.id, 
           selectedZoneId: zoneId,
           selectedSpotCode: selectedSpot.code,
-          action: 'proceed_to_payment'
+          action: 'proceed_to_payment',
+          pricePerSpot: spotPrice
         });
       } catch (error) {
-        console.error('Error checking booking info:', error);
+        console.error('Error confirming spot selection:', error);
         Alert.alert('Lỗi', 'Không thể xác nhận chỗ đặt. Vui lòng thử lại.');
       } finally {
         setIsLoading(false);
       }
     }
+  };
+
+  // Format giá thành chuỗi VND
+  const formatPrice = (price: number) => {
+    return price.toLocaleString('vi-VN') + ' VND';
   };
 
   return (
@@ -123,6 +140,18 @@ const BarkingLayoutScreen: React.FC = () => {
         <Text style={styles.headerSubtitle}>
           Chỗ trống: {availableSpots}/{totalSpots}
         </Text>
+        
+        {/* Hiển thị thông tin thời gian đã chọn */}
+        {bookingDate && (
+          <View style={styles.bookingInfoContainer}>
+            <Text style={styles.bookingInfoText}>
+              Ngày: {bookingDate} • Thời gian: {startTime} - {endTime}
+            </Text>
+            <Text style={styles.bookingInfoText}>
+              Thời lượng: {duration}
+            </Text>
+          </View>
+        )}
       </View>
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
@@ -180,7 +209,12 @@ const BarkingLayoutScreen: React.FC = () => {
                         onPress={() => handleSpotSelection(spot)}
                         disabled={spot.status !== 'available'}
                       >
-                        <Text style={styles.spotText}>{spot.code}</Text>
+                        <Text style={[
+                          styles.spotText,
+                          isSelected && styles.selectedSpotText
+                        ]}>
+                          {spot.code}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -196,11 +230,40 @@ const BarkingLayoutScreen: React.FC = () => {
         {selectedSpot && (
           <View style={styles.selectedSpotInfo}>
             <Text style={styles.selectedSpotTitle}>Chỗ đỗ xe đã chọn</Text>
-            <Text style={styles.selectedSpotText}>
-              Mã chỗ: {selectedSpot.code}
-            </Text>
-            <Text style={styles.selectedSpotText}>
-              Trạng thái: {selectedSpot.status === 'available' ? 'Có thể đặt' : 'Không khả dụng'}
+            <View style={styles.spotInfoRow}>
+              <Text style={styles.selectedSpotLabel}>
+                Mã chỗ:
+              </Text>
+              <Text style={styles.selectedSpotValue}>
+                {selectedSpot.code}
+              </Text>
+            </View>
+            <View style={styles.spotInfoRow}>
+              <Text style={styles.selectedSpotLabel}>
+                Trạng thái:
+              </Text>
+              <Text style={styles.selectedSpotValue}>
+                {selectedSpot.status === 'available' ? 'Có thể đặt' : 'Không khả dụng'}
+              </Text>
+            </View>
+            <View style={styles.spotInfoRow}>
+              <Text style={styles.selectedSpotLabel}>
+                Vị trí:
+              </Text>
+              <Text style={styles.selectedSpotValue}>
+                Hàng {selectedSpot.position.row + 1}, Cột {selectedSpot.position.col + 1}
+              </Text>
+            </View>
+            <View style={styles.spotInfoRow}>
+              <Text style={styles.selectedSpotLabel}>
+                Giá tiền:
+              </Text>
+              <Text style={styles.priceValue}>
+                {formatPrice(spotPrice)}
+              </Text>
+            </View>
+            <Text style={styles.priceNote}>
+              (Đã bao gồm thuế và phí dịch vụ)
             </Text>
           </View>
         )}
@@ -217,7 +280,9 @@ const BarkingLayoutScreen: React.FC = () => {
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <Text style={styles.confirmButtonText}>
-              {selectedSpot ? 'Xác nhận chọn chỗ này' : 'Vui lòng chọn một chỗ đỗ xe'}
+              {selectedSpot 
+                ? `Xác nhận chọn chỗ ${selectedSpot.code} - ${formatPrice(spotPrice)}` 
+                : 'Vui lòng chọn một chỗ đỗ xe'}
             </Text>
           )}
         </TouchableOpacity>
@@ -251,6 +316,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 4,
+  },
+  bookingInfoContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee'
+  },
+  bookingInfoText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4
   },
   scrollView: {
     flex: 1,
@@ -349,6 +425,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  selectedSpotText: {
+    color: '#fff',
+  },
   noDataText: {
     textAlign: 'center',
     marginVertical: 20,
@@ -363,13 +442,35 @@ const styles = StyleSheet.create({
   selectedSpotTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 12,
     color: '#333',
   },
-  selectedSpotText: {
-    fontSize: 16,
-    marginBottom: 4,
+  spotInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  selectedSpotLabel: {
+    fontSize: 14,
     color: '#555',
+  },
+  selectedSpotValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  priceValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  priceNote: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
+    textAlign: 'right',
   },
   confirmButton: {
     backgroundColor: '#3b82f6',

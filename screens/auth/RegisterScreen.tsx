@@ -6,6 +6,20 @@ import { appColor } from '../../constants/appColors';
 import { Alert } from 'react-native';
 import api from '../../api/axiosConfig';
 
+// Định nghĩa kiểu dữ liệu cho response register
+interface RegisterResponse {
+  success: boolean;
+  message: string;
+  user?: {
+    user_id: number;
+    username: string;
+    full_name: string;
+    email: string;
+    phone: string;
+    role: string;
+  };
+}
+
 const RegisterScreen = () => {
   const navigation = useNavigation();
   const [formData, setFormData] = useState({
@@ -81,18 +95,18 @@ const RegisterScreen = () => {
       
       console.log('Sending registration data:', userData);
       
-      const response = await api.post('/auth/register', userData);
+      const registerData = await api.post<any, RegisterResponse>('/auth/register', userData);
       
-      console.log('Registration response:', response.data);
+      console.log('Registration response:', registerData);
       
-      if (response.data && response.data.success) {
+      if (registerData && registerData.success) {
         Alert.alert(
           'Thành công', 
-          'Đăng ký tài khoản thành công!', 
+          registerData.message || 'Đăng ký tài khoản thành công!', 
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } else {
-        Alert.alert('Lỗi', response.data.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+        Alert.alert('Lỗi', registerData.message || 'Đăng ký thất bại. Vui lòng thử lại.');
       }
     } catch (error: any) {
       console.error('Registration error:', error);
