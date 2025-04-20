@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -7,17 +7,23 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from './BookingScreen';
+import { RootStackParamList } from '../../Navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'PaymentScreen'>;
 
 const PaymentScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<PaymentScreenRouteProp>();
+  
+  // Add state for QR code
+  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const { 
     bookingId, 
@@ -34,8 +40,54 @@ const PaymentScreen: React.FC = () => {
     phoneNumber
   } = route.params;
   
-  const handlePaymentMethod = (method: string) => {
-    // Ở đây sẽ xử lý thanh toán thật, nhưng hiện tại chỉ hiển thị thông báo
+  const handlePaymentMethod = async (method: string) => {
+    try {
+      setIsProcessing(true);
+      
+      // Simulate API call for payment processing
+      setTimeout(() => {
+        // Store payment method in AsyncStorage for history
+        AsyncStorage.setItem('last_payment_method', method).catch(console.error);
+        
+        // If method is digital payment, show QR code
+        if (['MoMo', 'ZaloPay'].includes(method)) {
+          setQrCodeData('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJQAAACUCAYAAAB1PADUAAAAAklEQVR4AewaftIAAATTSURBVO3BQY4cSRIEQdNA/f/Lun30UwCJ9GpyuCaCP1K15KRq0UnVopOqRSdVi06qFp1ULTqpWnRSteikatFJ1aKTqkUnVYtOqhadVC06qVr0yUtAfpOaJ4C8oWYCMql5Asik5gbIb1LzxknVopOqRSdViz5ZpmYTkCeA3Ki5ATIBuQFyo2ZSMwGZ1Nyo2QRk00nVopOqRSdViz75MiBPqHkCyKTmCSA3ajYB2QTkCTXfdFK16KRq0UnVok/+cUCeUDMBuVEzAblRMwH5l5xULTqpWnRSteiT/zNqJiA3am6APAFkUvMvOaladFK16KRq0SdfpuY3AZnU3Kh5AsiNmt+k5m9yUrXopGrRSdWiT5YB+ZPUTEAmNROQN9Q8AWRSMwG5UfNNQL5JzQ2QGzVvnFQtOqladFK1CH9kEZBJzQRkk5rfBGRS8waQSc0EZFJzA+RGzTedVC06qVp0UrXokz9MzQRkUjMBuQHyhpoJyA2QSc0EZFLzhJobIDdqJiA3at44qVp0UrXopGoR/sgXAZnUPAFkUjMBmdRMQG7UPAFkUjMBeULNBGRS8waQSc03nVQtOqladFK1CH/kBSBPqJmATGpugPxJaiYgk5obIJOaGyBvqLkBMql546Rq0UnVopOqRfgjLwCZ1ExAnlAzAZnUPAHkRs0E5Ak1E5BJzTcBmdTcAJnUbDqpWnRSteikahH+yAtAJjW/CciNmieATGomIDdqboA8oeYJIJOa33RSteikatFJ1SL8kReATGomIE+omYDcqHkCyKTmBsgbam6AbFIzAZnUfNNJ1aKTqkUnVYvwR/7DgExqJiBPqNkEZFIzAZnUPAHkRs0NkEnNGydVi06qFp1ULfrkJSC/Sc2k5g01TwCZ1NyomYA8AWRSc6NmAnKjZtNJ1aKTqkUnVYs+WaZmE5AbIDdqJiATkEnNBGRS85vUvKFmAvJNJ1WLTqoWnVQt+uTLgDyh5m+iZgIyqZmA3KiZgExA3gByo+abTqoWnVQtOqla9EldAZnUTEBu1NyomYBMaiYgk5ongNyoeeOkatFJ1aKTqkWf/OOAPAFkUjMBuVEzAZnU3KiZgExqJiCTmgnIjZpNJ1WLTqoWnVQt+uTL1HyTmgnIpOYGyKTmRs0bQN4A8oSaCcg3nVQtOqladFK16JNlQH4TkCeA3AD5JjVvAJnU3ACZ1HzTSdWik6pFJ1WL8EeqlpxULTqpWnRSteikatFJ1aKTqkUnVYtOqhadVC06qVp0UrXopGrRSdWik6pFJ1WL/gfOKj4ur80SFQAAAABJRU5ErkJggg==');
+          
+          setTimeout(() => {
+            Alert.alert(
+              'Quét mã QR',
+              `Vui lòng quét mã QR bằng ứng dụng ${method} để thanh toán.`,
+              [
+                {
+                  text: 'Đã thanh toán',
+                  onPress: () => {
+                    setQrCodeData(null);
+                    completePayment(method);
+                  },
+                },
+                {
+                  text: 'Hủy',
+                  style: 'cancel',
+                  onPress: () => setQrCodeData(null),
+                },
+              ]
+            );
+            setIsProcessing(false);
+          }, 1000);
+        } else {
+          // For cash or bank card, just show success message
+          completePayment(method);
+          setIsProcessing(false);
+        }
+      }, 1500);
+    } catch (error) {
+      console.error('Lỗi khi xử lý thanh toán:', error);
+      Alert.alert('Lỗi', 'Không thể xử lý thanh toán. Vui lòng thử lại.');
+      setIsProcessing(false);
+    }
+  };
+  
+  const completePayment = (method: string) => {
     Alert.alert(
       'Thanh toán thành công',
       `Bạn đã thanh toán thành công cho đặt chỗ ${bookingId} tại vị trí ${spotCode}, khu vực ${zoneId} với phương thức ${method}.`,
@@ -111,59 +163,83 @@ const PaymentScreen: React.FC = () => {
           </View>
         </View>
         
+        {/* QR Code Display */}
+        {qrCodeData && (
+          <View style={styles.qrCodeContainer}>
+            <Text style={styles.qrCodeTitle}>Quét mã QR để thanh toán</Text>
+            <Image 
+              source={{ uri: qrCodeData }}
+              style={styles.qrCode}
+              resizeMode="contain"
+            />
+            <Text style={styles.qrCodeInstructions}>
+              Sử dụng ứng dụng ví điện tử để quét mã QR và hoàn tất thanh toán
+            </Text>
+          </View>
+        )}
+        
         <Text style={styles.sectionTitle}>Phương thức thanh toán</Text>
         
-        <TouchableOpacity 
-          style={styles.paymentMethod}
-          onPress={() => handlePaymentMethod('MoMo')}
-        >
-          <View style={styles.paymentIcon}>
-            <Text style={{fontSize: 24}}>💰</Text>
+        {isProcessing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Đang xử lý thanh toán...</Text>
           </View>
-          <View style={styles.paymentInfo}>
-            <Text style={styles.paymentTitle}>MoMo</Text>
-            <Text style={styles.paymentDescription}>Thanh toán qua ví điện tử MoMo</Text>
-          </View>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.paymentMethod}
-          onPress={() => handlePaymentMethod('ZaloPay')}
-        >
-          <View style={styles.paymentIcon}>
-            <Text style={{fontSize: 24}}>💳</Text>
-          </View>
-          <View style={styles.paymentInfo}>
-            <Text style={styles.paymentTitle}>ZaloPay</Text>
-            <Text style={styles.paymentDescription}>Thanh toán qua ví điện tử ZaloPay</Text>
-          </View>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.paymentMethod}
-          onPress={() => handlePaymentMethod('Thẻ ngân hàng')}
-        >
-          <View style={styles.paymentIcon}>
-            <Text style={{fontSize: 24}}>🏦</Text>
-          </View>
-          <View style={styles.paymentInfo}>
-            <Text style={styles.paymentTitle}>Thẻ ngân hàng</Text>
-            <Text style={styles.paymentDescription}>Thanh toán qua thẻ ATM/Visa/Mastercard</Text>
-          </View>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.paymentMethod}
-          onPress={() => handlePaymentMethod('Tiền mặt')}
-        >
-          <View style={styles.paymentIcon}>
-            <Text style={{fontSize: 24}}>💵</Text>
-          </View>
-          <View style={styles.paymentInfo}>
-            <Text style={styles.paymentTitle}>Tiền mặt</Text>
-            <Text style={styles.paymentDescription}>Thanh toán khi đến bãi đỗ xe</Text>
-          </View>
-        </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('MoMo')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>💰</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>MoMo</Text>
+                <Text style={styles.paymentDescription}>Thanh toán qua ví điện tử MoMo</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('ZaloPay')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>💳</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>ZaloPay</Text>
+                <Text style={styles.paymentDescription}>Thanh toán qua ví điện tử ZaloPay</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('Thẻ ngân hàng')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>🏦</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>Thẻ ngân hàng</Text>
+                <Text style={styles.paymentDescription}>Thanh toán qua thẻ ATM/Visa/Mastercard</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('Tiền mặt')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>💵</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>Tiền mặt</Text>
+                <Text style={styles.paymentDescription}>Thanh toán khi đến bãi đỗ xe</Text>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -293,6 +369,48 @@ const styles = StyleSheet.create({
   },
   paymentDescription: {
     fontSize: 14,
+    color: '#666',
+  },
+  qrCodeContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  qrCodeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#333',
+  },
+  qrCode: {
+    width: 200,
+    height: 200,
+    marginBottom: 16,
+  },
+  qrCodeInstructions: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
     color: '#666',
   },
 });

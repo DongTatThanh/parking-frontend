@@ -32,6 +32,30 @@ interface ApiResponse<T> {
   data: T;
 }
 
+interface BookingCreationResponse {
+  bookingId: number;
+  bookingDetails: {
+    booking_id: number;
+    status: string;
+    start_time: string;
+    end_time: string;
+    booking_type: string;
+    qr_code: string;
+    username: string;
+    full_name: string;
+    email: string;
+    phone: string;
+    license_plate: string;
+    vehicle_type: string;
+    slot_code: string;
+    zone_name: string;
+    price: string;
+  };
+  paymentId: number;
+  amount: number;
+  qrCode: string;
+}
+
 type ParkingLayoutScreenRouteProp = RouteProp<RootStackParamList, 'BarkingLayoutScreen'>;
 
 const BarkingLayoutScreen: React.FC = () => {
@@ -120,7 +144,7 @@ const BarkingLayoutScreen: React.FC = () => {
         });
 
         // Tạo booking trước khi chuyển đến màn hình thanh toán
-        const response = await api.post<ApiResponse<{ bookingId: string }>>('/bookings/create', {
+        const response = await api.post('/bookings/create', {
           spotId: selectedSpot.id,
           zoneId: zoneId,
           bookingDate: bookingDate,
@@ -139,13 +163,17 @@ const BarkingLayoutScreen: React.FC = () => {
           throw new Error(response.message || 'Không thể tạo đặt chỗ');
         }
 
-        // Nhận bookingId từ API
-        const bookingData = response.data;
+        // Nhận bookingId và thông tin thanh toán từ API
+        const bookingData = response.data as BookingCreationResponse;
+        const bookingId = bookingData.bookingId.toString();
+        const amount = bookingData.amount || spotPrice;
+        
+        console.log('Đã tạo booking thành công với ID:', bookingId);
         
         // Chuyển đến màn hình thanh toán với bookingId
         navigation.navigate('PaymentScreen', {
-          bookingId: bookingData.data.bookingId,
-          totalPrice: spotPrice,
+          bookingId: bookingId,
+          totalPrice: amount,
           currency: 'VND',
           spotCode: selectedSpot.code,
           zoneId: zoneId,
@@ -153,7 +181,9 @@ const BarkingLayoutScreen: React.FC = () => {
           startTime: startTime,
           endTime: endTime,
           duration: duration,
-          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily'
+          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily',
+          licensePlate: bookingData.bookingDetails?.license_plate,
+          phoneNumber: bookingData.bookingDetails?.phone
         });
       } catch (error) {
         console.error('Error creating booking:', error);

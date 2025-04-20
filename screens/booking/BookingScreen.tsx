@@ -157,6 +157,30 @@ interface LicensePlateCheckResponse {
   isExisting: boolean;
 }
 
+interface BookingCreationResponse {
+  bookingId: number;
+  bookingDetails: {
+    booking_id: number;
+    status: string;
+    start_time: string;
+    end_time: string;
+    booking_type: string;
+    qr_code: string;
+    username: string;
+    full_name: string;
+    email: string;
+    phone: string;
+    license_plate: string;
+    vehicle_type: string;
+    slot_code: string;
+    zone_name: string;
+    price: string;
+  };
+  paymentId: number;
+  amount: number;
+  qrCode: string;
+}
+
 // Progress bar component
 const ProgressBar: React.FC<{ progress: number, color: string }> = ({ progress, color }) => {
   return (
@@ -561,28 +585,45 @@ const BookingScreen: React.FC = () => {
   // Hàm xử lý chuyển đến màn hình thanh toán
   const handlePaymentNavigation = async (spotId: number, zoneId: string, spotCode?: string) => {
     try {
+      setLoading(true);
       console.log('====== CHUYỂN ĐẾN THANH TOÁN ======');
       // Log dữ liệu đầu vào
       console.log('Dữ liệu nhận vào:', { spotId, zoneId, spotCode });
       console.log('Loại vé:', activeTab);
       
-      // Tạo booking với giá từ vị trí đỗ xe hoặc giá mặc định
-      const bookingId = `BK${Math.floor(Math.random() * 1000000)}`;
+      // Tạo booking với API
+      const response = await api.post('/bookings/create', {
+        spotId: spotId,
+        zoneId: zoneId,
+        bookingDate: activeTab === 'daily' ? dailyBookingDate : monthlyStartDate,
+        startTime: activeTab === 'daily' ? dailyStartTime : '00:00',
+        endTime: activeTab === 'daily' ? dailyEndTime : '23:59',
+        duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
+        spotCode: spotCode || 'A01',
+        totalPrice: priceInfo ? priceInfo.price : activeTab === 'monthly' ? 200000 : 20000,
+        currency: 'VND',
+        bookingType: activeTab,
+      });
       
-      // Sử dụng giá từ vị trí đỗ xe (nếu có) hoặc giá từ priceInfo
-      let totalPrice = priceInfo ? priceInfo.price : activeTab === 'monthly' ? 200000 : 20000;
+      console.log('Response từ API tạo booking:', response);
       
-      // Nếu có route.params và có pricePerSpot, sử dụng giá này
-      if (route.params && 'pricePerSpot' in route.params && typeof route.params.pricePerSpot === 'number') {
-        totalPrice = route.params.pricePerSpot;
+      if (!response.success) {
+        throw new Error(response.message || 'Không thể tạo đặt chỗ');
       }
+      
+      // Nhận bookingId và thông tin thanh toán từ API
+      const bookingData = response.data as BookingCreationResponse;
+      const bookingId = bookingData.bookingId.toString();
+      const amount = bookingData.amount || (priceInfo ? priceInfo.price : 0);
+      
+      console.log('Đã tạo booking thành công với ID:', bookingId);
 
       // Chuẩn bị dữ liệu cho màn hình thanh toán
       const paymentData = {
         bookingId,
-        totalPrice,
+        totalPrice: amount,
         currency: 'VND',
-        spotCode: spotCode || 'A01',
+        spotCode: spotCode || bookingData.bookingDetails?.slot_code || 'A01',
         zoneId,
         // Thêm thông tin thời gian
         bookingDate: activeTab === 'daily' ? dailyBookingDate : monthlyStartDate,
@@ -590,8 +631,8 @@ const BookingScreen: React.FC = () => {
         endTime: activeTab === 'daily' ? dailyEndTime : '23:59',
         duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
         bookingType: activeTab,
-        licensePlate,
-        phoneNumber
+        licensePlate: licensePlate || bookingData.bookingDetails?.license_plate,
+        phoneNumber: phoneNumber || bookingData.bookingDetails?.phone
       };
       
       console.log('Chuyển đến màn hình thanh toán với dữ liệu:', paymentData);
@@ -601,6 +642,8 @@ const BookingScreen: React.FC = () => {
     } catch (error) {
       console.error('Lỗi khi chuyển đến thanh toán:', error);
       Alert.alert('Lỗi', 'Không thể xử lý thanh toán. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1109,24 +1152,24 @@ const BookingScreen: React.FC = () => {
           </View>
 
           <View style={styles.tabContainer}>
-            <TouchableOpacity
+              <TouchableOpacity 
               style={[styles.tab, activeTab === 'daily' && styles.activeTab]}
               onPress={() => handleTabChange('daily')}
-            >
+              >
               <Text style={[styles.tabText, activeTab === 'daily' && styles.activeTabText]}>
                 Vé Ngày
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+              </TouchableOpacity>
+              <TouchableOpacity 
               style={[styles.tab, activeTab === 'monthly' && styles.activeTab]}
               onPress={() => handleTabChange('monthly')}
-            >
+              >
               <Text style={[styles.tabText, activeTab === 'monthly' && styles.activeTabText]}>
                 Vé Tháng
               </Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
           </View>
-
+          
           {activeTab === 'daily' ? renderDailyTab() : renderMonthlyTab()}
 
           <View style={styles.parkingZonesSection}>
