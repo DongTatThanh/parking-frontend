@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -11,12 +11,14 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../../api/booking';
 import BarkingLayoutScreen from './BarkingLayoutScreen';
+import axios from 'axios';
 
 // Define RootStackParamList here to include all the parameters we need
 export type RootStackParamList = {
@@ -48,6 +50,7 @@ export type RootStackParamList = {
     totalPrice: number;
   };
   HomeScreen: undefined;
+  Login: undefined;
   PaymentScreen: {
     bookingId: string;
     totalPrice: number;
@@ -128,11 +131,10 @@ interface ZoneDetailsResponse {
 }
 
 interface PriceCalculationResponse {
-  priceId: number;
-  pricePerUnit: string;
-  bookingType: string;
   totalPrice: number;
+  pricePerUnit: number;
   currency: string;
+  hours?: number;
 }
 
 interface BookingResponse {
@@ -153,8 +155,9 @@ interface BookingResponse {
 }
 
 interface LicensePlateCheckResponse {
-  licensePlate: string;
-  isExisting: boolean;
+  success?: boolean;
+  message?: string;
+  isExisting?: boolean;
 }
 
 interface BookingCreationResponse {
@@ -180,6 +183,18 @@ interface BookingCreationResponse {
   amount: number;
   qrCode: string;
 }
+
+// Thêm interface cho User
+interface User {
+  id: number;
+  username?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+
+// Mock list biển số xe đã đăng ký để test
+
 
 // Progress bar component
 const ProgressBar: React.FC<{ progress: number, color: string }> = ({ progress, color }) => {
@@ -215,7 +230,8 @@ const BookingScreen: React.FC = () => {
   const [monthlyEndDate, setMonthlyEndDate] = useState<string>('Chưa chọn');
 
   // State cho người dùng (nếu cần)
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [userId, setUserId] = useState<number | null>(null);
 
   // State cho số điện thoại
   const [phoneNumber, setPhoneNumber] = useState<string>('');
@@ -231,7 +247,42 @@ const BookingScreen: React.FC = () => {
 
   const [priceDetailsLog, setPriceDetailsLog] = useState<string[]>([]);
 
-  // Lưu trữ dữ liệu người dùng vào AsyncStorage
+  // Animation refs
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+
+  // Lưu thông tin người dùng vào AsyncStorage sau khi đăng nhập thành công
+  const saveUserInfoToStorage = async (user: User) => {
+    try {
+      await AsyncStorage.setItem('userInfo', JSON.stringify(user));
+      console.log('Đã lưu thông tin người dùng vào AsyncStorage:', user);
+    } catch (error) {
+      console.error('Lỗi khi lưu thông tin người dùng:', error);
+    }
+  };
+
+  // Khôi phục thông tin người dùng từ AsyncStorage
+  const loadUserInfoFromStorage = async () => {
+    try {
+      const userInfoStr = await AsyncStorage.getItem('userInfo');
+      if (userInfoStr) {
+        const userInfo = JSON.parse(userInfoStr);
+        setUser(userInfo);
+        setUserId(userInfo.id);
+        console.log('Đã khôi phục thông tin người dùng từ AsyncStorage:', userInfo);
+      } else {
+        console.log('Không tìm thấy thông tin người dùng trong AsyncStorage');
+      }
+    } catch (error) {
+      console.error('Lỗi khi khôi phục thông tin người dùng:', error);
+    }
+  };
+
+  // Gọi loadUserInfoFromStorage khi component mount
+  useEffect(() => {
+    loadUserInfoFromStorage();
+  }, []);
+
+  // Lưu dữ liệu người dùng vào AsyncStorage
   const saveUserInputToStorage = async () => {
     try {
       if (licensePlate) {
@@ -279,6 +330,41 @@ const BookingScreen: React.FC = () => {
     }
   };
 
+  // Thêm useEffect riêng để lấy userId từ AsyncStorage
+  useEffect(() => {
+    const fetchUserId = async () => {
+      try {
+        // Thử lấy từ userInfo trước
+        const userInfoStr = await AsyncStorage.getItem('userInfo');
+        if (userInfoStr) {
+          const userInfo = JSON.parse(userInfoStr);
+          if (userInfo.id) {
+            setUserId(userInfo.id);
+            console.log('Đã lấy userId từ userInfo:', userInfo.id);
+            return;
+          }
+        }
+
+        // Nếu không có trong userInfo, thử lấy từ user
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.id) {
+            setUserId(user.id);
+            console.log('Đã lấy userId từ user:', user.id);
+            return;
+          }
+        }
+
+        console.log('Không tìm thấy userId trong AsyncStorage');
+      } catch (error) {
+        console.error('Lỗi khi lấy userId từ AsyncStorage:', error);
+      }
+    };
+
+    fetchUserId();
+  }, []);
+
   // Gọi API khi component mount
   useEffect(() => {
     fetchParkingZones(); // Gọi API để lấy danh sách các khu vực
@@ -286,9 +372,15 @@ const BookingScreen: React.FC = () => {
     
     // Lấy thông tin người dùng từ AsyncStorage
     const fetchUser = async () => {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        setUser(JSON.parse(userData));
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const parsedUser = JSON.parse(userData) as User;
+          setUser(parsedUser);
+          console.log('Đã tải thông tin người dùng:', parsedUser);
+        }
+      } catch (error) {
+        console.error('Lỗi khi tải thông tin người dùng:', error);
       }
     };
     fetchUser();
@@ -333,14 +425,13 @@ const BookingScreen: React.FC = () => {
   // Tự động tính giá dựa trên thời gian và pricePerUnit
   const calculateDefaultPrice = (startTimeStr: string, endTimeStr: string) => {
     try {
-      console.log('========= THÔNG TIN ĐẶT CHỖ =========');
+     
       console.log('Thời gian đặt:', { 
         ngày: startTimeStr.split(' ')[0], 
         bắt_đầu: startTimeStr.split(' ')[1], 
         kết_thúc: endTimeStr.split(' ')[1]
       });
-      console.log('=====================================');
-      console.log('Tính giá vé với:', { startTimeStr, endTimeStr });
+   
       
       // Xử lý format ngày tháng
       const parseTime = (timeStr: string) => {
@@ -708,58 +799,146 @@ const BookingScreen: React.FC = () => {
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
+  // Cập nhật hàm format biển số xe
   const formatLicensePlate = (text: string) => {
-    // Remove all invalid characters
+    // Xóa tất cả ký tự không phải chữ và số
     text = text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-    // Extract parts
-    const numbers1 = text.slice(0, 2).replace(/[^0-9]/g, ''); // First 2 digits
-    const middle = text.slice(2, 4).replace(/[^A-Z0-9]/g, ''); // Next 2 characters (1 letter + 1 letter/number)
-    const numbers2 = text.slice(4).replace(/[^0-9]/g, '').slice(0, 5); // Last 3-5 digits
-
-    // Combine with hyphens
-    let formatted = numbers1;
-    if (middle) formatted += ` ${middle}`;
-    if (numbers2) formatted += ` ${numbers2}`;
-    return formatted.trim();
-  };
-
-  const validateLicensePlate = (plate: string) => {
-    // Format: XX YZ NNNNN where:
-    // XX: exactly 2 digits
-    // Y: 1 letter
-    // Z: 1 letter or number
-    // NNNNN: 3 to 5 digits
-    const pattern = /^[0-9]{2}\s[A-Z][A-Z0-9]\s[0-9]{3,5}$/;
-    return pattern.test(plate);
-  };
-
-  const validatePhoneNumber = (phone: string) => {
-    // Ensure the phone number is exactly 10 digits
-    const pattern = /^[0-9]{10}$/;
-    return pattern.test(phone);
+    
+    // Tách các phần của biển số
+    const numbers1 = text.slice(0, 2).replace(/[^0-9]/g, ''); // 2 số đầu
+    const middle = text.slice(2, 4).replace(/[^A-Z0-9]/g, ''); // 1-2 ký tự giữa
+    const numbers2 = text.slice(4).replace(/[^0-9]/g, '').slice(0, 5); // 3-5 số cuối
+    
+    // Format để hiển thị trên UI
+    let displayFormat = numbers1;
+    if (middle) displayFormat += ` ${middle}`;
+    if (numbers2) displayFormat += ` ${numbers2}`;
+    
+    // Format để gửi lên API (không có khoảng trắng)
+    const apiFormat = `${numbers1}${middle}${numbers2}`.trim();
+    
+    console.log('Format biển số:', {
+      display: displayFormat.trim(),
+      forApi: apiFormat
+    });
+    
+    return {
+      display: displayFormat.trim(),
+      api: apiFormat
+    };
   };
 
   const handleLicensePlateChange = (text: string) => {
-    const formattedPlate = formatLicensePlate(text);
-    setLicensePlate(formattedPlate);
+    const formatted = formatLicensePlate(text);
+    setLicensePlate(formatted.display);
+  };
+
+  // Cập nhật hàm kiểm tra biển số
+  const checkLicensePlate = async (licensePlateDisplay: string) => {
+    try {
+      // Nếu userId chưa có, thử lấy lại từ AsyncStorage
+      const currentUserId = userId || await loadUserIdFromStorage();
+      
+      if (!currentUserId) {
+        console.log('Không tìm thấy userId, không thể kiểm tra biển số');
+        return {
+          valid: false,
+          message: 'Vui lòng đăng nhập lại để tiếp tục'
+        };
+      }
+
+      console.log('Đang kiểm tra biển số xe:', licensePlateDisplay);
+      console.log('Sử dụng userId:', currentUserId);
+      
+      // Format biển số cho API
+      const formatted = formatLicensePlate(licensePlateDisplay);
+      const licensePlateForApi = formatted.api;
+      
+      console.log('Gửi yêu cầu kiểm tra biển số:', {
+        licensePlate: licensePlateForApi,
+        userId: currentUserId
+      });
+      
+      const response = await api.post('/bookings/check-license-plate', {
+        licensePlate: licensePlateForApi,
+        userId: currentUserId
+      });
+
+      console.log('Phản hồi API:', response);
+
+      if (response.success) {
+        const responseData = response.data as LicensePlateCheckResponse;
+        
+        if (responseData && responseData.isExisting) {
+          return {
+            valid: false,
+            message: 'Biển số xe này đã được đăng ký trong hệ thống'
+          };
+        }
+        return {
+          valid: true,
+          message: response.message || 'Biển số xe hợp lệ'
+        };
+      } else {
+        return {
+          valid: false,
+          message: response.message || 'Không thể xác nhận biển số xe'
+        };
+      }
+    } catch (error) {
+      console.error('Lỗi khi kiểm tra biển số:', error);
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response?.data?.message?.includes('Phiên đăng nhập đã hết hạn')) {
+          await AsyncStorage.multiRemove(['token', 'userInfo', 'user']);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
+          return {
+            valid: false,
+            message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+          };
+        }
+      }
+      
+      return {
+        valid: false,
+        message: 'Có lỗi xảy ra khi kiểm tra biển số. Vui lòng thử lại sau.'
+      };
+    }
   };
 
   const handleLicensePlateConfirm = async () => {
-    if (!licensePlate || !validateLicensePlate(licensePlate)) {
-      Alert.alert('Lỗi', 'Biển số xe không hợp lệ');
+    if (!licensePlate) {
+      Alert.alert('Thông báo', 'Vui lòng nhập biển số xe');
       return;
     }
     
-    setLoading(true);
     try {
-      const isValid = await checkLicensePlate(licensePlate);
-      if (isValid) {
+      console.log('Bắt đầu xác nhận biển số xe:', licensePlate);
+      console.log('Sử dụng userId:', userId);
+      setLoading(true);
+      
+      // Gọi hàm kiểm tra biển số với userId cụ thể
+      const result = await checkLicensePlate(licensePlate);
+      console.log('Kết quả kiểm tra biển số:', result);
+      
+      if (result.valid) {
+        // Xác nhận biển số hợp lệ
+        console.log('Biển số xe hợp lệ');
         setIsLicensePlateConfirmed(true);
         saveUserInputToStorage();
+        Alert.alert('Thành công', 'Biển số xe đã xác nhận thành công');
+      } else {
+        // Hiển thị thông báo lỗi với animation
+        showLicensePlateError(result.message);
       }
-    } catch (error) {
-      console.error('Lỗi xác nhận biển số xe:', error);
+    } catch (error: any) {
+      console.error('Lỗi xác nhận biển số:', error);
+      const errorMessage = error.message || 'Đã xảy ra lỗi khi xác nhận biển số xe';
+      showLicensePlateError(errorMessage);
+      setIsLicensePlateConfirmed(false);
     } finally {
       setLoading(false);
     }
@@ -775,14 +954,19 @@ const BookingScreen: React.FC = () => {
       <Text style={styles.label}>Biển số xe</Text>
       {!isLicensePlateConfirmed ? (
         <View style={styles.licensePlateInputContainer}>
-          <TextInput
-            style={styles.licensePlateInput}
-            value={licensePlate}
-            onChangeText={handleLicensePlateChange}
-            placeholder="VD: 26 A1 12345"
-            autoCapitalize="characters"
-            maxLength={12}
-          />
+          <Animated.View style={{ transform: [{ translateX: shakeAnimation }] }}>
+            <TextInput
+              style={[
+                styles.licensePlateInput,
+                isLicensePlateConfirmed ? styles.confirmedInput : null
+              ]}
+              value={licensePlate}
+              onChangeText={handleLicensePlateChange}
+              placeholder="VD: 26 A1 12345"
+              autoCapitalize="characters"
+              maxLength={12}
+            />
+          </Animated.View>
           {loading ? (
             <ActivityIndicator size="small" color="#3b82f6" style={styles.confirmButton} />
           ) : (
@@ -947,157 +1131,6 @@ const BookingScreen: React.FC = () => {
     }
   };
 
-  // Cập nhật hàm kiểm tra biển số xe
-  const checkLicensePlate = async (licensePlate: string) => {
-    try {
-      console.log('Kiểm tra biển số xe:', licensePlate);
-      
-      // Lấy userId từ thông tin người dùng đã lưu trong AsyncStorage
-      let userId = null;
-      const userData = await AsyncStorage.getItem('user');
-      
-      // Bắt buộc đăng nhập để kiểm tra biển số
-      if (!userData) {
-        Alert.alert('Thông báo', 'Bạn cần đăng nhập để kiểm tra biển số xe.');
-        return false;
-      }
-      
-      try {
-        const user = JSON.parse(userData);
-        userId = user.id;
-        if (!userId) {
-          throw new Error('ID người dùng không hợp lệ.');
-        }
-        console.log('Kiểm tra biển số xe với userId:', userId);
-      } catch (parseError) {
-        console.error('Lỗi khi xử lý dữ liệu người dùng:', parseError);
-        Alert.alert('Thông báo', 'Dữ liệu người dùng không hợp lệ. Vui lòng đăng nhập lại.');
-        // Có thể thêm điều hướng về màn hình Login ở đây nếu cần
-        // navigation.navigate('Login'); 
-        return false;
-      }
-      
-      // Gọi API kiểm tra biển số xe
-      const response = await api.post('/bookings/check-license-plate', { 
-        licensePlate,
-        userId
-      });
-      
-      console.log('License plate check response:', response);
-      
-      // Kiểm tra phản hồi thành công và có dữ liệu
-      if (response.success && response.data) {
-        const licenseData = response.data as LicensePlateCheckResponse;
-        
-        // Nếu biển số xe đã đăng ký (isExisting = true), hiển thị cảnh báo
-        if (licenseData.isExisting) {
-          Alert.alert('Thông báo', 'Biển số xe này đã được đăng ký cho một đặt chỗ khác.');
-          return false; // Không cho phép xác nhận
-        }
-        // Biển số hợp lệ và chưa được đăng ký
-        console.log('Biển số xe hợp lệ và chưa được đăng ký');
-        return true; // Cho phép xác nhận
-      }
-      
-      // Trường hợp API không trả về success hoặc không có data
-      const errorMessage = response.message || 'Không thể kiểm tra biển số xe. Vui lòng thử lại sau.';
-      Alert.alert('Thông báo', errorMessage);
-      return false; // Không cho phép xác nhận
-
-    } catch (error: any) {
-      console.error('Lỗi khi kiểm tra biển số xe:', error);
-      
-      // Xử lý lỗi cụ thể từ API nếu có (ví dụ: token hết hạn)
-      let displayMessage = 'Đã xảy ra lỗi khi kiểm tra biển số xe. Vui lòng thử lại sau.';
-      if (error.message && error.message.includes('hết hạn')) {
-         displayMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
-         // Xóa token và user data, điều hướng về Login
-         await AsyncStorage.multiRemove(['auth_token', 'user']);
-         // Cần đảm bảo Login Screen đã được thêm vào RootStackParamList
-         // navigation.navigate('Login');
-      } else if (error.message) {
-         displayMessage = error.message; // Hiển thị lỗi từ API nếu có
-      }
-
-      Alert.alert('Lỗi', displayMessage);
-      return false; // Không cho phép xác nhận khi có lỗi
-    }
-  }
-
-  // Xử lý params từ ChooseTime.js
-  useEffect(() => {
-    if (route.params) {
-      const { 
-        bookingDate, 
-        startTime, 
-        endTime, 
-        duration,
-        monthlyStartDate,
-        selectedSpotId, 
-        selectedZoneId,
-        selectedSpotCode,
-        action,
-        ticketType
-      } = route.params;
-
-      // Xử lý các trường hợp cụ thể
-      if (bookingDate && startTime && endTime) {
-        // Trường hợp vé ngày - giữ tab vé ngày
-        setActiveTab('daily');
-        setDailyBookingDate(bookingDate);
-        setDailyStartTime(startTime);
-        setDailyEndTime(endTime);
-        if (duration) setDailyDuration(duration);
-        
-        console.log('Nhận thông tin đặt vé ngày từ màn hình chọn thời gian:', {
-          ngày: bookingDate,
-          giờ_bắt_đầu: startTime,
-          giờ_kết_thúc: endTime,
-          thời_lượng: duration || 'chưa tính'
-        });
-        
-        // Gọi API tính giá sau khi có thông tin
-        // Gọi API tính giá sau khi có thông tin
-        setTimeout(() => {
-          updatePriceInfo();
-        }, 500);
-      } else if (monthlyStartDate) {
-        // Trường hợp vé tháng - giữ tab vé tháng
-        setActiveTab('monthly');
-        const startDate = new Date(monthlyStartDate);
-        setMonthlyStartDate(formatDate(startDate));
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 30);
-        setMonthlyEndDate(formatDate(endDate));
-        // Gọi API tính giá vé tháng
-        setTimeout(() => {
-          calculateMonthlyPrice();
-        }, 500);
-      }
-      
-      // Lưu thông tin thời gian vào AsyncStorage
-      const saveBookingTimeInfo = async () => {
-        try {
-          if (bookingDate) await AsyncStorage.setItem('booking_date', bookingDate);
-          if (startTime) await AsyncStorage.setItem('booking_start_time', startTime);
-          if (endTime) await AsyncStorage.setItem('booking_end_time', endTime);
-          if (duration) await AsyncStorage.setItem('booking_duration', duration);
-          if (monthlyStartDate) await AsyncStorage.setItem('booking_monthly_start_date', monthlyStartDate);
-          if (activeTab) await AsyncStorage.setItem('booking_active_tab', activeTab);
-        } catch (error) {
-          console.error('Lỗi khi lưu thông tin thời gian:', error);
-        }
-      };
-      
-      saveBookingTimeInfo();
-
-      // Nếu có action proceed_to_payment, kiểm tra điều kiện và chuyển đến màn hình thanh toán
-      if (selectedSpotId && selectedZoneId && action === 'proceed_to_payment') {
-        handlePaymentNavigation(selectedSpotId, selectedZoneId, selectedSpotCode);
-      }
-    }
-  }, [route.params]);
-
   // Cập nhật hàm tính giá vé tháng
   const calculateMonthlyPrice = async () => {
     try {
@@ -1124,6 +1157,163 @@ const BookingScreen: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const validateLicensePlate = (plate: string) => {
+    // Format: XX YZ NNNNN where:
+    // XX: exactly 2 digits
+    // Y: 1 letter
+    // Z: 1 letter or number
+    // NNNNN: 3 to 5 digits
+    const pattern = /^[0-9]{2}\s[A-Z][A-Z0-9]\s[0-9]{3,5}$/;
+    return pattern.test(plate);
+  };
+
+  const validatePhoneNumber = (phone: string) => {
+    // Ensure the phone number is exactly 10 digits
+    const pattern = /^[0-9]{10}$/;
+    return pattern.test(phone);
+  };
+
+  // Hàm hiển thị thông báo lỗi với style rõ ràng
+  const showLicensePlateError = (message: string) => {
+    console.log('Hiển thị lỗi biển số:', message);
+    
+    // Hiển thị thông báo lỗi với style rõ ràng
+    Alert.alert(
+      'Biển số xe không khả dụng',
+      message,
+      [{ text: 'Đã hiểu', style: 'default' }],
+      { cancelable: false }
+    );
+    
+    // Animation lắc cho input biển số xe
+    Animated.sequence([
+      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true })
+    ]).start();
+    
+    // Reset trạng thái biển số
+    setIsLicensePlateConfirmed(false);
+  };
+
+  // DEBUG: Hàm kiểm tra toàn bộ AsyncStorage
+  const debugAsyncStorage = async () => {
+    try {
+      console.log('===== DEBUG: ASYNC STORAGE =====');
+      const keys = await AsyncStorage.getAllKeys();
+      console.log('AsyncStorage Keys:', keys);
+
+      // Kiểm tra các khóa liên quan đến user
+      const userKeys = ['user', 'userInfo', 'userData', 'token'];
+      for (const key of userKeys) {
+        if (keys.includes(key)) {
+          const value = await AsyncStorage.getItem(key);
+          console.log(`AsyncStorage[${key}]:`, value);
+          if (value) {
+            try {
+              const parsed = JSON.parse(value);
+              console.log(`Parsed[${key}]:`, parsed);
+              if (parsed.id) {
+                console.log(`ID from ${key}:`, parsed.id);
+              } else if (parsed.user && parsed.user.id) {
+                console.log(`ID from ${key}.user:`, parsed.user.id);
+              }
+            } catch (e) {
+              console.log(`Cannot parse ${key}`);
+            }
+          }
+        } else {
+          console.log(`Key '${key}' not found in AsyncStorage`);
+        }
+      }
+      console.log('================================');
+    } catch (error) {
+      console.error('Debug error:', error);
+    }
+  };
+
+  // Gọi hàm debug khi component mount
+  useEffect(() => {
+    debugAsyncStorage();
+  }, []);
+
+  // Cập nhật khôi phục userId từ AsyncStorage
+  const loadUserIdFromStorage = async () => {
+    try {
+      // Kiểm tra tất cả các khóa có thể chứa userId
+      const userData = await AsyncStorage.getItem('user');
+      const userInfo = await AsyncStorage.getItem('userInfo');
+      const token = await AsyncStorage.getItem('token');
+      
+      console.log('Kiểm tra AsyncStorage cho userId:');
+      console.log('- user data:', userData ? 'exists' : 'none');
+      console.log('- user info:', userInfo ? 'exists' : 'none');
+      console.log('- token:', token ? 'exists' : 'none');
+      
+      let id = null;
+      
+      // Thử lấy từ userInfo
+      if (userInfo) {
+        const parsedUserInfo = JSON.parse(userInfo);
+        console.log('UserInfo structure:', Object.keys(parsedUserInfo));
+        
+        if (parsedUserInfo.id) {
+          id = parsedUserInfo.id;
+          console.log('Đã tìm thấy ID trong userInfo:', id);
+        } else if (parsedUserInfo.user_id) {
+          id = parsedUserInfo.user_id;
+          console.log('Đã tìm thấy user_id trong userInfo:', id);
+        }
+      }
+      
+      // Thử lấy từ user
+      if (!id && userData) {
+        const parsedUserData = JSON.parse(userData);
+        console.log('User structure:', Object.keys(parsedUserData));
+        
+        // Kiểm tra trường user_id
+        if (parsedUserData.user_id) {
+          id = parsedUserData.user_id;
+          console.log('Đã tìm thấy user_id trong userData:', id);
+        }
+        // Kiểm tra trường id
+        else if (parsedUserData.id) {
+          id = parsedUserData.id;
+          console.log('Đã tìm thấy id trong userData:', id);
+        }
+        // Kiểm tra user lồng nhau
+        else if (parsedUserData.user) {
+          if (parsedUserData.user.id) {
+            id = parsedUserData.user.id;
+            console.log('Đã tìm thấy id trong userData.user:', id);
+          } else if (parsedUserData.user.user_id) {
+            id = parsedUserData.user.user_id;
+            console.log('Đã tìm thấy user_id trong userData.user:', id);
+          }
+        }
+      }
+      
+      // Nếu tìm thấy id
+      if (id) {
+        console.log('Đặt userId =', id);
+        setUserId(Number(id)); // Đảm bảo id là số
+        return Number(id);
+      }
+      
+      console.log('Không tìm thấy userId trong AsyncStorage');
+      return null;
+    } catch (error) {
+      console.error('Lỗi khi lấy userId từ AsyncStorage:', error);
+      return null;
+    }
+  };
+
+  // Thay thế useEffect cũ để gọi loadUserIdFromStorage
+  useEffect(() => {
+    loadUserIdFromStorage();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1698,6 +1888,10 @@ const styles = StyleSheet.create({
     color: '#856404',
     fontSize: 14,
     textAlign: 'center',
+  },
+  confirmedInput: {
+    backgroundColor: '#e6ffed',
+    borderColor: '#34d399',
   },
 });
 

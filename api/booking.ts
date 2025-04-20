@@ -60,6 +60,19 @@ axiosInstance.interceptors.response.use(
       });
     }
 
+    // Xử lý Bad Request (400) - Biển số xe đã tồn tại
+    if (error.response.status === 400) {
+      console.error('Bad Request Error [400]:', error.response.data);
+      
+      // Hiển thị chi tiết lỗi
+      const errorData = error.response.data as any;
+      // Đảm bảo chuyển đổi đúng định dạng cho frontend
+      return Promise.reject({
+        success: false,
+        message: errorData.message || 'Yêu cầu không hợp lệ, vui lòng kiểm tra lại thông tin'
+      });
+    }
+
     // Xử lý khi token hết hạn (401)
     if (error.response.status === 401 && originalRequest) {
       try {
@@ -89,9 +102,14 @@ axiosInstance.interceptors.response.use(
       message: error.message
     });
 
-    return Promise.reject(error.response?.data || {
+    // Đảm bảo trả về cấu trúc lỗi chuẩn cho frontend
+    const errorResponseData = error.response?.data as any;
+    return Promise.reject({
       success: false,
-      message: error.message || 'Có lỗi xảy ra'
+      message: 
+        (typeof errorResponseData === 'object' && errorResponseData?.message) ||
+        error.message ||
+        'Có lỗi xảy ra'
     });
   }
 );

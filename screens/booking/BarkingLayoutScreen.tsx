@@ -134,17 +134,8 @@ const BarkingLayoutScreen: React.FC = () => {
       setIsLoading(true);
 
       try {
-        console.log('Tạo booking với thông tin:', {
-          spotId: selectedSpot.id,
-          zoneId: zoneId,
-          bookingDate: bookingDate,
-          startTime: startTime,
-          endTime: endTime,
-          totalPrice: spotPrice
-        });
-
-        // Tạo booking trước khi chuyển đến màn hình thanh toán
-        const response = await api.post('/bookings/create', {
+        // Tạo booking data để gửi đi
+        const bookingData = {
           spotId: selectedSpot.id,
           zoneId: zoneId,
           bookingDate: bookingDate,
@@ -155,23 +146,28 @@ const BarkingLayoutScreen: React.FC = () => {
           totalPrice: spotPrice,
           currency: 'VND',
           bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily',
-        });
+        };
+        
+        console.log('Tạo booking với thông tin:', JSON.stringify(bookingData, null, 2));
 
-        console.log('Response từ API tạo booking:', response);
+        // Gọi API tạo booking
+        const response = await api.post('/bookings/create', bookingData);
+
+        console.log('Response từ API tạo booking:', JSON.stringify(response, null, 2));
 
         if (!response.success) {
           throw new Error(response.message || 'Không thể tạo đặt chỗ');
         }
 
         // Nhận bookingId và thông tin thanh toán từ API
-        const bookingData = response.data as BookingCreationResponse;
-        const bookingId = bookingData.bookingId.toString();
-        const amount = bookingData.amount || spotPrice;
+        const responseData = response.data as BookingCreationResponse;
+        const bookingId = responseData.bookingId.toString();
+        const amount = responseData.amount || spotPrice;
         
         console.log('Đã tạo booking thành công với ID:', bookingId);
         
-        // Chuyển đến màn hình thanh toán với bookingId
-        navigation.navigate('PaymentScreen', {
+        // Chuẩn bị data cho màn hình thanh toán
+        const paymentScreenData = {
           bookingId: bookingId,
           totalPrice: amount,
           currency: 'VND',
@@ -181,22 +177,24 @@ const BarkingLayoutScreen: React.FC = () => {
           startTime: startTime,
           endTime: endTime,
           duration: duration,
-          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily',
-          licensePlate: bookingData.bookingDetails?.license_plate,
-          phoneNumber: bookingData.bookingDetails?.phone
-        });
-      } catch (error) {
-        console.error('Error creating booking:', error);
-        Alert.alert('Lỗi', 'Không thể tạo đặt chỗ. Vui lòng thử lại.');
+          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily' as 'monthly' | 'daily',
+          licensePlate: responseData.bookingDetails?.license_plate,
+          phoneNumber: responseData.bookingDetails?.phone
+        };
         
-        // Nếu lỗi, vẫn chuyển đến màn hình booking để xử lý theo luồng cũ
-        navigation.navigate('BookingScreen', {
-          selectedSpotId: selectedSpot.id, 
-          selectedZoneId: zoneId,
-          selectedSpotCode: selectedSpot.code,
-          action: 'proceed_to_payment',
-          pricePerSpot: spotPrice
-        });
+        console.log('Chuyển đến màn hình thanh toán với dữ liệu:', JSON.stringify(paymentScreenData, null, 2));
+        
+        // Chuyển đến màn hình thanh toán với bookingId
+        navigation.navigate('PaymentScreen', paymentScreenData);
+      } catch (error: any) {
+        console.error('Error creating booking:', error);
+        let errorMessage = 'Không thể tạo đặt chỗ. Vui lòng thử lại.';
+        
+        if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        Alert.alert('Lỗi', errorMessage);
       } finally {
         setIsLoading(false);
       }
@@ -207,23 +205,23 @@ const BarkingLayoutScreen: React.FC = () => {
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + ' VND';
   };
-
+  
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
           <Text style={styles.backButtonText}>← Quay lại</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.headerTitle}>Sơ đồ khu {zoneId}</Text>
-        <Text style={styles.headerSubtitle}>
+          </TouchableOpacity>
+          
+          <Text style={styles.headerTitle}>Sơ đồ khu {zoneId}</Text>
+          <Text style={styles.headerSubtitle}>
           Chỗ trống: {availableSpots}/{totalSpots}
-        </Text>
+          </Text>
         
         {/* Hiển thị thông tin thời gian đã chọn */}
         {bookingDate && (
@@ -243,31 +241,31 @@ const BarkingLayoutScreen: React.FC = () => {
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
         {/* Chú thích màu */}
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.availableColor]} />
             <Text>Còn trống</Text>
-          </View>
-          <View style={styles.legendItem}>
+            </View>
+            <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.occupiedColor]} />
             <Text>Đã sử dụng</Text>
-          </View>
-          <View style={styles.legendItem}>
+            </View>
+            <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.reservedColor]} />
             <Text>Đã đặt trước</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.selectedColor]} />
             <Text>Đã chọn</Text>
-          </View>
-        </View>
-        
-        {/* Sơ đồ chỗ đỗ xe */}
-        <View style={styles.parkingMap}>
-          <View style={styles.entranceSign}>
-            <Text style={styles.entranceText}>Lối vào</Text>
+            </View>
           </View>
           
+        {/* Sơ đồ chỗ đỗ xe */}
+          <View style={styles.parkingMap}>
+            <View style={styles.entranceSign}>
+              <Text style={styles.entranceText}>Lối vào</Text>
+            </View>
+            
           {spots.length > 0 ? (
             <View style={styles.grid}>
               {Array.from({ length: maxRows }).map((_, rowIndex) => (
@@ -311,8 +309,8 @@ const BarkingLayoutScreen: React.FC = () => {
           ) : (
             <Text style={styles.noDataText}>Không có dữ liệu chỗ đỗ xe</Text>
           )}
-        </View>
-        
+          </View>
+          
         {/* Thông tin chỗ đã chọn */}
         {selectedSpot && (
           <View style={styles.selectedSpotInfo}>
@@ -354,10 +352,10 @@ const BarkingLayoutScreen: React.FC = () => {
             </Text>
           </View>
         )}
-        
-        <TouchableOpacity
-          style={[
-            styles.confirmButton,
+            
+            <TouchableOpacity 
+              style={[
+                styles.confirmButton,
             (!selectedSpot || isLoading) && styles.disabledButton
           ]}
           disabled={!selectedSpot || isLoading}
@@ -366,13 +364,13 @@ const BarkingLayoutScreen: React.FC = () => {
           {isLoading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.confirmButtonText}>
+              <Text style={styles.confirmButtonText}>
               {selectedSpot 
                 ? `Xác nhận chọn chỗ ${selectedSpot.code} - ${formatPrice(spotPrice)}` 
                 : 'Vui lòng chọn một chỗ đỗ xe'}
-            </Text>
+              </Text>
           )}
-        </TouchableOpacity>
+            </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
