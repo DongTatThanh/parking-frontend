@@ -1,147 +1,379 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, AxiosRequestHeaders } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// URL của server API
-const BASE_URL = 'http://192.168.0.101:3000/api';
+// Định nghĩa URL base cho API
+// const BASE_URL = 'http://192.168.0.101:3000/api';
+const BASE_URL = 'http://192.168.169.161:3000/api';
+// Fallback URL nếu CloudFront chặn request
+const DIRECT_BASE_URL = 'http://192.168.169.161:3000/api';
 
-// Interface cho API Response
+// Định nghĩa các interface để làm việc với API
 export interface ApiResponse<T> {
   success: boolean;
-  data: T;
   message?: string;
+  data: T;
 }
 
-// Tạo instance Axios
-const axiosInstance: AxiosInstance = axios.create({
-  baseURL: BASE_URL,
-  timeout: 15000, // 15 giây
-  headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  }
-});
+// Tạo API Service
+class ApiService {
+  axiosInstance: AxiosInstance;
+  directAxiosInstance: AxiosInstance;
 
-// Interceptor cho request - thêm token nếu có
-axiosInstance.interceptors.request.use(
-  async (config) => {
+  constructor() {
+    // Tạo instance chính
+    this.axiosInstance = axios.create({
+      baseURL: BASE_URL,
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    // Tạo instance trực tiếp (không qua CloudFront)
+    this.directAxiosInstance = axios.create({
+      baseURL: DIRECT_BASE_URL,
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    // Setup interceptors
+    this.setupInterceptors();
+  }
+
+  // Cài đặt interceptors để xử lý token và lỗi
+  private setupInterceptors() {
+    // Request interceptor để thêm token vào mỗi request
+    const setupRequestInterceptor = (instance: AxiosInstance) => {
+      instance.interceptors.request.use(
+        async (config) => {
+          try {
+            const token = await AsyncStorage.getItem('token');
+            if (token) {
+              if (!config.headers) {
+                config.headers = {} as AxiosRequestHeaders;
+              }
+              // Đặt token trong header
+              config.headers['Authorization'] = `Bearer ${token}`;
+              console.log('Token added to request:', token.substring(0, 15) + '...');
+            } else {
+              console.log('No token found in AsyncStorage');
+            }
+          } catch (error) {
+            console.error('Error retrieving token:', error);
+          }
+          return config;
+        },
+        (error) => {
+          console.error('Request Interceptor Error:', error);
+          return Promise.reject(error);
+        }
+      );
+    };
+
+    // Response interceptor để xử lý lỗi chung
+    const setupResponseInterceptor = (instance: AxiosInstance) => {
+      instance.interceptors.response.use(
+        (response) => {
+          return response.data;
+        },
+        async (error) => {
+          console.error('Response Interceptor Error:', error.response?.data || error.message);
+          
+          // Xử lý lỗi token hết hạn
+          if (error.response?.status === 401) {
+            const errorMsg = error.response?.data?.message;
+            if (errorMsg && (
+              errorMsg.includes('Phiên đăng nhập đã hết hạn') || 
+              errorMsg.includes('Token expired') ||
+              errorMsg.includes('Invalid token')
+            )) {
+              console.log('Token expired, clearing login info');
+              await AsyncStorage.multiRemove(['token', 'user', 'userInfo']);
+              // Xử lý chuyển hướng sẽ được thực hiện ở component
+            }
+          }
+          
+          return Promise.reject(error);
+        }
+      );
+    };
+
+    // Setup cho cả hai instance
+    setupRequestInterceptor(this.axiosInstance);
+    setupRequestInterceptor(this.directAxiosInstance);
+    setupResponseInterceptor(this.axiosInstance);
+    setupResponseInterceptor(this.directAxiosInstance);
+  }
+
+  // Phương thức GET
+  async get<T>(url: string, params?: any): Promise<ApiResponse<T>> {
     try {
-      const token = await AsyncStorage.getItem('auth_token');
-      if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
-      }
-      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
-      return config;
-    } catch (error) {
-      console.error('Error in request interceptor:', error);
-      return config;
-    }
-  },
-  (error) => {
-    console.error('Request error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// Interceptor cho response - xử lý lỗi, refresh token, etc.
-axiosInstance.interceptors.response.use(
-  (response: AxiosResponse) => {
-    console.log(`API Response [${response.status}]:`, response.data);
-    return response;
-  },
-  async (error: AxiosError) => {
-    const originalRequest = error.config;
-    
-    // Xử lý khi server không phản hồi
-    if (!error.response) {
-      console.error('Network Error: Không thể kết nối đến server');
-      return Promise.reject({
-        success: false,
-        message: 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.'
-      });
-    }
-
-    // Xử lý Bad Request (400) - Biển số xe đã tồn tại
-    if (error.response.status === 400) {
-      console.error('Bad Request Error [400]:', error.response.data);
+      const response = await this.axiosInstance.get<any, ApiResponse<T>>(url, { params });
+      return response;
+    } catch (error: any) {
+      console.error(`GET request to ${url} failed:`, error);
       
-      // Hiển thị chi tiết lỗi
-      const errorData = error.response.data as any;
-      // Đảm bảo chuyển đổi đúng định dạng cho frontend
-      return Promise.reject({
-        success: false,
-        message: errorData.message || 'Yêu cầu không hợp lệ, vui lòng kiểm tra lại thông tin'
-      });
-    }
-
-    // Xử lý khi token hết hạn (401)
-    if (error.response.status === 401 && originalRequest) {
-      try {
-        // Có thể thêm logic refresh token ở đây
-        console.log('Token hết hạn, cần đăng nhập lại');
-        
-        // Xóa token cũ
-        await AsyncStorage.removeItem('auth_token');
-        await AsyncStorage.removeItem('user');
-        
-        // Redirect về trang login (cần triển khai thông qua context hoặc navigation)
-        // Có thể sử dụng event emitter hoặc global state manager
-        return Promise.reject({
-          success: false,
-          message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
-        });
-      } catch (refreshError) {
-        console.error('Error refreshing auth token:', refreshError);
+      // Nếu bị lỗi 403 CloudFront, thử lại với URL trực tiếp
+      if (error.response?.status === 403) {
+        try {
+          console.log(`Retrying GET request to ${url} with direct URL`);
+          const directResponse = await this.directAxiosInstance.get<any, ApiResponse<T>>(url, { params });
+          return directResponse;
+        } catch (directError: any) {
+          console.error(`Direct GET request to ${url} failed:`, directError);
+          if (directError.response) {
+            return directError.response.data;
+          }
+        }
       }
+      
+      if (error.response) {
+        return error.response.data;
+      }
+      return {
+        success: false,
+        message: error.message || 'Lỗi kết nối đến máy chủ',
+        data: {} as T
+      };
     }
-
-    // Log lỗi chi tiết
-    console.error('API Error:', {
-      status: error.response?.status,
-      url: originalRequest?.url,
-      data: error.response?.data,
-      message: error.message
-    });
-
-    // Đảm bảo trả về cấu trúc lỗi chuẩn cho frontend
-    const errorResponseData = error.response?.data as any;
-    return Promise.reject({
-      success: false,
-      message: 
-        (typeof errorResponseData === 'object' && errorResponseData?.message) ||
-        error.message ||
-        'Có lỗi xảy ra'
-    });
   }
-);
 
-// Helper functions
-const api = {
-  // GET request
-  get: <T>(url: string, params?: any): Promise<ApiResponse<T>> => {
-    return axiosInstance.get(url, { params })
-      .then(response => response.data);
+  // Phương thức POST
+  async post<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+    try {
+      const response = await this.axiosInstance.post<any, ApiResponse<T>>(url, data);
+      return response;
+    } catch (error: any) {
+      console.error(`POST request to ${url} failed:`, error);
+      
+      // Nếu bị lỗi 403 CloudFront, thử lại với URL trực tiếp
+      if (error.response?.status === 403) {
+        try {
+          console.log(`Retrying POST request to ${url} with direct URL`);
+          const directResponse = await this.directAxiosInstance.post<any, ApiResponse<T>>(url, data);
+          return directResponse;
+        } catch (directError: any) {
+          console.error(`Direct POST request to ${url} failed:`, directError);
+          if (directError.response) {
+            return directError.response.data;
+          }
+        }
+      }
+      
+      if (error.response) {
+        return error.response.data;
+      }
+      return {
+        success: false,
+        message: error.message || 'Lỗi kết nối đến máy chủ',
+        data: {} as T
+      };
+    }
+  }
+
+  // Phương thức PUT
+  async put<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+    try {
+      const response = await this.axiosInstance.put<any, ApiResponse<T>>(url, data);
+      return response;
+    } catch (error: any) {
+      console.error(`PUT request to ${url} failed:`, error);
+      
+      // Nếu bị lỗi 403 CloudFront, thử lại với URL trực tiếp
+      if (error.response?.status === 403) {
+        try {
+          console.log(`Retrying PUT request to ${url} with direct URL`);
+          const directResponse = await this.directAxiosInstance.put<any, ApiResponse<T>>(url, data);
+          return directResponse;
+        } catch (directError: any) {
+          console.error(`Direct PUT request to ${url} failed:`, directError);
+          if (directError.response) {
+            return directError.response.data;
+          }
+        }
+      }
+      
+      if (error.response) {
+        return error.response.data;
+      }
+      return {
+        success: false,
+        message: error.message || 'Lỗi kết nối đến máy chủ',
+        data: {} as T
+      };
+    }
+  }
+
+  // Phương thức DELETE
+  async delete<T>(url: string): Promise<ApiResponse<T>> {
+    try {
+      const response = await this.axiosInstance.delete<any, ApiResponse<T>>(url);
+      return response;
+    } catch (error: any) {
+      console.error(`DELETE request to ${url} failed:`, error);
+      
+      // Nếu bị lỗi 403 CloudFront, thử lại với URL trực tiếp
+      if (error.response?.status === 403) {
+        try {
+          console.log(`Retrying DELETE request to ${url} with direct URL`);
+          const directResponse = await this.directAxiosInstance.delete<any, ApiResponse<T>>(url);
+          return directResponse;
+        } catch (directError: any) {
+          console.error(`Direct DELETE request to ${url} failed:`, directError);
+          if (directError.response) {
+            return directError.response.data;
+          }
+        }
+      }
+      
+      if (error.response) {
+        return error.response.data;
+      }
+      return {
+        success: false,
+        message: error.message || 'Lỗi kết nối đến máy chủ',
+        data: {} as T
+      };
+    }
+  }
+
+  // Refresh token method
+  async refreshToken() {
+    try {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+      
+      const response = await axios.post(`${BASE_URL}/auth/refresh-token`, {
+        refreshToken
+      });
+      
+      if (response.data.success) {
+        const { token, refreshToken: newRefreshToken } = response.data.data;
+        await AsyncStorage.setItem('token', token);
+        await AsyncStorage.setItem('refreshToken', newRefreshToken);
+        return token;
+      } else {
+        throw new Error(response.data.message || 'Failed to refresh token');
+      }
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      await AsyncStorage.multiRemove(['token', 'refreshToken', 'user', 'userInfo']);
+      throw error;
+    }
+  }
+}
+
+// Tạo instance của ApiService
+const apiService = new ApiService();
+
+// Tạo API cho booking
+const bookingApi = {
+  // Lấy danh sách khu vực
+  getParkingZones<T>() {
+    return apiService.get<T>('/bookings/zones');
   },
 
-  // POST request
-  post: <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> => {
-    return axiosInstance.post(url, data, config)
-      .then(response => response.data);
+  // Lấy chi tiết khu vực
+  getZoneDetails<T>(zoneId: string | number) {
+    return apiService.get<T>(`/bookings/zones/${zoneId}`);
   },
 
-  // PUT request
-  put: <T>(url: string, data?: any): Promise<ApiResponse<T>> => {
-    return axiosInstance.put(url, data)
-      .then(response => response.data);
+  // Kiểm tra biển số xe - hỗ trợ cả GET và POST
+  checkLicensePlate<T>(licensePlate: string, userId: number) {
+    // Thử sử dụng GET (được phép qua CloudFront)
+    try {
+      return apiService.get<T>(`/bookings/check-license-plate?licensePlate=${encodeURIComponent(licensePlate)}&userId=${userId}`);
+    } catch (error) {
+      console.log('GET request failed, falling back to POST');
+      return apiService.post<T>('/bookings/check-license-plate', { licensePlate, userId });
+    }
   },
 
-  // DELETE request
-  delete: <T>(url: string): Promise<ApiResponse<T>> => {
-    return axiosInstance.delete(url)
-      .then(response => response.data);
+  // Tính giá booking
+  calculatePrice<T>(data: { bookingType: 'daily' | 'monthly', startTime: string, endTime: string }) {
+    return apiService.post<T>('/bookings/calculate-price', data);
   },
-  
-  // Lấy instance gốc của Axios nếu cần
-  axiosInstance
+
+  // Tạo booking mới
+  createBooking<T>(data: {
+    userId: number;
+    spotId: number;
+    zoneId: string | number;
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    duration: string;
+    spotCode: string;
+    totalPrice: number;
+    currency: string;
+    bookingType: 'daily' | 'monthly';
+    licensePlate?: string;
+    phoneNumber?: string;
+    vehicleType?: string;
+  }) {
+    return apiService.post<T>('/bookings/create', data);
+  },
+
+  // Lấy booking của user
+  getUserBookings<T>(userId: number) {
+    return apiService.get<T>(`/bookings/user/${userId}`);
+  },
+
+  // Hủy booking
+  cancelBooking<T>(bookingId: number, userId: number) {
+    return apiService.post<T>(`/bookings/${bookingId}/cancel`, { userId });
+  }
 };
 
-export default api;
+// Tạo API cho user/auth
+const authApi = {
+  // Đăng ký
+  register<T>(data: {
+    username: string;
+    password: string;
+    email: string;
+    phone?: string;
+    full_name?: string;
+  }) {
+    return apiService.post<T>('/auth/register', data);
+  },
+
+  // Đăng nhập
+  login<T>(data: { username: string; password: string }) {
+    return apiService.post<T>('/auth/login', data);
+  },
+
+  // Lấy thông tin user
+  getUserInfo<T>() {
+    return apiService.get<T>('/auth/user');
+  },
+
+  // Cập nhật thông tin user
+  updateUserInfo<T>(data: { phone?: string; full_name?: string }) {
+    return apiService.put<T>('/auth/user', data);
+  },
+  
+  // Verify token validity
+  verifyToken<T>() {
+    return apiService.get<T>('/auth/verify-token');
+  }
+};
+
+// Export các API và service
+export default {
+  ...bookingApi,
+  get: apiService.get.bind(apiService),
+  post: apiService.post.bind(apiService),
+  put: apiService.put.bind(apiService),
+  delete: apiService.delete.bind(apiService),
+  refreshToken: apiService.refreshToken.bind(apiService),
+  axiosInstance: apiService.axiosInstance,
+  directAxiosInstance: apiService.directAxiosInstance,
+  auth: authApi
+};
