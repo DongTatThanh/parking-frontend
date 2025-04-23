@@ -10,10 +10,10 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
-
 
 const { width } = Dimensions.get('window');
 
@@ -32,18 +32,6 @@ const categoryData = [
   { id: '2', title: 'Thông Tin Chỗ Đặt', image: require('../../assets/images/oto.png'), screen:'BookingConfirmationScreen'},
   { id: '3', title: 'Bảo Hiểm Xe', image: require('../../assets/images/oto.png'), screen: 'InsuranceScreen' },
   { id: '4', title: 'Về chúng tôi', image: require('../../assets/images/oto.png'), screen: 'AboutScreen' },
-]; 
-const bookingData = [
-  {
-    spotId: "spot-123",
-    bookingCode: "BC-113" ,
-    userName: "Người dùng",
-    phone: "0123456789",
-    bookingTime: new Date().toISOString(),
-    ticketType: "Tiêu chuẩn",
-    expiryTime: new Date(Date.now() + 3600000).toISOString(),
-    totalAmount: 50000 
-  },
 ]; 
 
 type ServiceCardProps = {
@@ -83,15 +71,15 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ title, image, screen }) => 
       style={styles.categoryCard}
       onPress={() => {
         if (screen === 'BookingConfirmationScreen') {
-          navigation.navigate(screen, {
-            spotId: "spot-123",
-            bookingCode: "BC-113",
-            userName: "Người dùng",
-            phone: "0123456789",
-            bookingTime: new Date().toISOString(),
-            ticketType: "Tiêu chuẩn",
-            expiryTime: new Date(Date.now() + 3600000).toISOString(),
-            totalAmount: 50000
+          // Lấy dữ liệu booking gần nhất từ AsyncStorage (nếu có)
+          AsyncStorage.getItem('last_booking').then((bookingStr) => {
+            if (bookingStr) {
+              const booking = JSON.parse(bookingStr);
+              navigation.navigate(screen, booking);
+            } else {
+              // Nếu chưa có booking, không hiển thị thông tin
+              navigation.navigate(screen, null);
+            }
           });
         } else {
           navigation.navigate(screen);

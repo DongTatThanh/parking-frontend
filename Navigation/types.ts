@@ -1,6 +1,7 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
 
 export type RootStackParamList = {
+
   BookingScreen: {
     bookingDate?: string;
     startTime?: string;
@@ -72,4 +73,21 @@ export type BottomTabParamList = {
   History: undefined;
   Profile: undefined;
   Settings: undefined;
+};
+export type BookingStackParamList = {
+  BookingScreen: {
+    bookingDate?: string;
+    startTime?: string;
+    endTime?: string;
+    duration?: string;
+    monthlyStartDate?: string;
+    selectedSpotId?: number;
+    selectedZoneId?: string;
+    selectedSpotCode?: string;
+    action?: 'proceed_to_payment';
+    ticketType?: 'daily' | 'monthly';
+    selectedTimeSlots?: string;
+    selectedTimeSlotNames?: string;
+    pricePerSpot?: number;
+  };
 };

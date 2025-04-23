@@ -13,30 +13,60 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
 
-type BookingConfirmationScreenRouteProp = RouteProp<RootStackParamList, 'BookingConfirmationScreen'>;
+type BookingConfirmationScreenRouteProp = RouteProp<RootStackParamList, 'PaymentScreen'>;
 
 const BookingConfirmationScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<BookingConfirmationScreenRouteProp>();
-  const { 
-    spotId, 
-    bookingCode,
-    userName,
-    phone,
-    monthlyStartDate,
-    bookingTime, 
-    ticketType,
-    expiryTime,
-    totalAmount
+  const {
+    bookingId,
+    spotCode,
+    bookingDate,
+    startTime,
+    endTime,
+    duration,
+    bookingType,
+    licensePlate,
+    totalPrice,
+   
+    phoneNumber,
+ 
   } = route.params;
+
+  const [invoice, setInvoice] = React.useState<any>(null);
+  React.useEffect(() => {
+    const fetchInvoice = async () => {
+      try {
+        const api = require('../../api/booking').default;
+        // Lấy bookingId từ params, nếu không có thì lấy userId và gọi API lấy booking mới nhất
+        let code = bookingId;
+        if (!code && userName && phoneNumber) {
+          // Gọi API lấy booking mới nhất của user
+          const response = await api.get(`/bookings/user-latest?userName=${encodeURIComponent(userName)}&phone=${encodeURIComponent(phoneNumber)}`);
+          if (response.success && response.data && response.data.bookingCode) {
+            code = response.data.bookingCode;
+          }
+        }
+        if (code) {
+          const response = await api.get(`/bookings/invoice/${code}`);
+          if (response.success && response.data) {
+            setInvoice(response.data);
+          }
+        }
+      } catch (error) {
+        console.log('Không thể lấy hóa đơn:', error);
+      }
+    };
+    fetchInvoice();
+  }, [bookingId, userName, phoneNumber]);
 
   const handleShare = async () => {
     try {
       await Share.share({
         message: `Thông tin đặt chỗ đỗ xe của tôi:
-Mã đặt chỗ: ${bookingCode}
-Vị trí: ${spotId}
-Hạn sử dụng: ${expiryTime}
+Mã đặt chỗ: ${bookingId}
+Vị trí: ${spotCode}
+Hạn sử dụng: ${endTime}
 Cảm ơn bạn đã sử dụng dịch vụ TÌM BÃI NHANH!`,
       });
     } catch (error) {
@@ -60,7 +90,7 @@ Cảm ơn bạn đã sử dụng dịch vụ TÌM BÃI NHANH!`,
               <Text style={styles.bookingStatusIconText}>✓</Text>
             </View>
             <Text style={styles.bookingStatusText}>Đặt chỗ thành công!</Text>
-            <Text style={styles.bookingCodeText}>Mã đặt chỗ: {bookingCode}</Text>
+            <Text style={styles.bookingCodeText}>Mã đặt chỗ: {bookingId}</Text>
           </View>
           
           <View style={styles.infoCard}>
@@ -73,7 +103,7 @@ Cảm ơn bạn đã sử dụng dịch vụ TÌM BÃI NHANH!`,
             
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Số điện thoại:</Text>
-              <Text style={styles.infoValue}>{phone}</Text>
+              <Text style={styles.infoValue}>{phoneNumber}</Text>
             </View>
           </View>
           
@@ -82,31 +112,66 @@ Cảm ơn bạn đã sử dụng dịch vụ TÌM BÃI NHANH!`,
             
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Vị trí đỗ xe:</Text>
-              <Text style={styles.infoValue}>{spotId}</Text>
+              <Text style={styles.infoValue}>{spotCode}</Text>
             </View>
             
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Thời gian đặt:</Text>
-              <Text style={styles.infoValue}>{bookingTime}</Text>
+              <Text style={styles.infoValue}>{bookingDate}</Text>
             </View>
             
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Loại vé:</Text>
-              <Text style={styles.infoValue}>{ticketType}</Text>
+              <Text style={styles.infoLabel}>Thời gian bắt đầu:</Text>
+              <Text style={styles.infoValue}>{startTime}</Text>
             </View>
             
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Hạn sử dụng:</Text>
-              <Text style={styles.infoValue}>{expiryTime}</Text>
+              <Text style={styles.infoLabel}>Thời gian kết thúc:</Text>
+              <Text style={styles.infoValue}>{endTime}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Thời lượng:</Text>
+              <Text style={styles.infoValue}>{duration}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Loại đặt chỗ:</Text>
+              <Text style={styles.infoValue}>{bookingType}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Biển số xe:</Text>
+              <Text style={styles.infoValue}>{licensePlate}</Text>
             </View>
             
             <View style={styles.divider} />
             
             <View style={styles.infoRow}>
               <Text style={styles.totalLabel}>Tổng thanh toán:</Text>
-              <Text style={styles.totalValue}>{totalAmount.toLocaleString()} VND</Text>
+              <Text style={styles.totalValue}>{totalPrice.toLocaleString()} VND</Text>
             </View>
           </View>
+
+          {/* Hiển thị hóa đơn nếu có */}
+          {invoice && (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoCardTitle}>Hóa đơn thanh toán</Text>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Mã hóa đơn:</Text>
+                <Text style={styles.infoValue}>{invoice.invoiceId}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Ngày lập:</Text>
+                <Text style={styles.infoValue}>{invoice.createdAt}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Tổng tiền:</Text>
+                <Text style={styles.infoValue}>{invoice.totalAmount?.toLocaleString()} VND</Text>
+              </View>
+              {/* Thêm các trường khác nếu cần */}
+            </View>
+          )}
           
           <View style={styles.infoCard}>
             <Text style={styles.infoCardTitle}>Hướng dẫn</Text>

@@ -177,7 +177,7 @@ interface BookingCreationResponse {
     vehicle_type: string;
     slot_code: string;
     zone_name: string;
-    price: string;
+    pricId: string;
   };
   paymentId: number;
   amount: number;
@@ -422,151 +422,105 @@ const BookingScreen: React.FC = () => {
     }
   }, [isLicensePlateConfirmed, isPhoneNumberConfirmed]);
 
-  // Tự động tính giá dựa trên thời gian và pricePerUnit
-  const calculateDefaultPrice = (startTimeStr: string, endTimeStr: string) => {
+  // Hàm gọi API backend để tính giá vé
+  const fetchPriceFromBackend = async (type: 'daily' | 'monthly', start: string, end: string) => {
     try {
-     
-      console.log('Thời gian đặt:', { 
-        ngày: startTimeStr.split(' ')[0], 
-        bắt_đầu: startTimeStr.split(' ')[1], 
-        kết_thúc: endTimeStr.split(' ')[1]
+      setLoading(true);
+      const response = await api.post('/bookings/calculate-price', {
+        bookingType: type,
+        startTime: start,
+        endTime: end
       });
-   
-      
-      // Xử lý format ngày tháng
-      const parseTime = (timeStr: string) => {
-        try {
-          const [datePart, timePart] = timeStr.split(' ');
-          if (!datePart || !timePart) {
-            throw new Error('Invalid time format');
+      if (response.success && response.data) {
+        setPriceInfo({
+          price: response.data.totalPrice,
+          currency: response.data.currency || 'VND',
+          priceId: response.data.priceId,
+          priceDetails: {
+            basePrice: response.data.pricePerUnit
           }
-          
-          const [day, month, year] = datePart.split('/').map(Number);
-          const [hour, minute, second = '0'] = timePart.split(':').map(Number);
-          
-          if (isNaN(day) || isNaN(month) || isNaN(year) || isNaN(hour) || isNaN(minute)) {
-            throw new Error('Invalid time components');
-          }
-          
-          // JavaScript months are 0-based (0-11)
-          return new Date(year, month - 1, day, hour, minute, Number(second));
-        } catch (error) {
-          console.error('Failed to parse time:', timeStr, error);
-          return null;
-        }
-      };
-      
-      const startTime = parseTime(startTimeStr);
-      const endTime = parseTime(endTimeStr);
-      
-      if (!startTime || !endTime) {
-        console.log('Không thể chuyển đổi thời gian, sử dụng giá cố định');
-       
-        return;
+        });
+      } else {
+        setPriceInfo(null);
+        Alert.alert('Lỗi', response.message || 'Không thể lấy giá vé.');
       }
-      
-      // Xử lý trường hợp endTime < startTime (qua ngày)
-      let bookingEndTime = endTime;
-      if (endTime.getTime() < startTime.getTime()) {
-        bookingEndTime = new Date(endTime.getTime());
-        bookingEndTime.setDate(bookingEndTime.getDate() + 1);
-        console.log('Phát hiện đặt qua đêm, điều chỉnh ngày kết thúc:', bookingEndTime.toLocaleString());
-      }
-      
-      // Tính số giờ tổng
-      const durationInHours = (bookingEndTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-      console.log('Tổng thời gian đặt:', durationInHours.toFixed(2), 'giờ');
-      
-      if (isNaN(durationInHours) || durationInHours <= 0) {
-        console.log('Thời lượng không hợp lệ, sử dụng giá cố định');
-        ;
-        return;
-      }
-      
-      // Giá mặc định: 8.000 VND mỗi giờ (như API trả về)
-      const hourlyRate = 8000;
-      
-      // Cách tính mới: Tính theo ms chính xác cho từng ca
-      const calculateHoursInTimeSlot = (slotStartHour: number, slotEndHour: number) => {
-        // Tạo time slot cho ngày hiện tại
-        const slotStart = new Date(startTime);
-        slotStart.setHours(slotStartHour, 0, 0, 0);
-        
-        const slotEnd = new Date(startTime);
-        if (slotEndHour <= slotStartHour) {
-          // Nếu slot kết thúc qua ngày (ví dụ: 18:00-00:00)
-          slotEnd.setDate(slotEnd.getDate() + 1);
-        }
-        // Xử lý 00:00 đặc biệt
-        slotEnd.setHours(slotEndHour === 0 ? 24 : slotEndHour, 0, 0, 0);
-        
-        // Tính thời điểm bắt đầu và kết thúc của phần giao nhau
-        const overlapStart = Math.max(slotStart.getTime(), startTime.getTime());
-        const overlapEnd = Math.min(slotEnd.getTime(), bookingEndTime.getTime());
-        
-        // Tính số giờ từ ms
-        const overlapDuration = overlapEnd - overlapStart;
-        const hours = overlapDuration > 0 ? overlapDuration / (1000 * 60 * 60) : 0;
-        
-        return hours;
-      };
-      
-      // Tính số giờ trong từng khung giờ
-      const hoursInMorning = calculateHoursInTimeSlot(6, 12);
-      const hoursInAfternoon = calculateHoursInTimeSlot(12, 18);
-      const hoursInEvening = calculateHoursInTimeSlot(18, 0); // 00:00 ngày hôm sau
-      const hoursInNight = calculateHoursInTimeSlot(0, 6);
-      
-      // Tính tổng giá
-      const totalHours = hoursInMorning + hoursInAfternoon + hoursInEvening + hoursInNight;
-      let totalPrice = hourlyRate * totalHours;
-      
-      // Đảm bảo giá tối thiểu
-      totalPrice = Math.max(hourlyRate, totalPrice);
-      
-      // Làm tròn lên đến hàng nghìn
-      totalPrice = Math.ceil(totalPrice / 1000) * 1000;
-      
-      console.log('Chi tiết tính giá:');
-      console.log(`- Buổi sáng (06:00-12:00): ${hoursInMorning.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInMorning * hourlyRate).toLocaleString()} VND`);
-      console.log(`- Buổi chiều (12:00-18:00): ${hoursInAfternoon.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInAfternoon * hourlyRate).toLocaleString()} VND`);
-      console.log(`- Buổi tối (18:00-00:00): ${hoursInEvening.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInEvening * hourlyRate).toLocaleString()} VND`);
-      console.log(`- Qua đêm (00:00-06:00): ${hoursInNight.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInNight * hourlyRate).toLocaleString()} VND`);
-      console.log(`- Tổng: ${totalPrice.toLocaleString()} VND (${totalHours.toFixed(2)} giờ)`);
-      
-      const details = [
-        `- Buổi sáng (06:00-12:00): ${hoursInMorning.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInMorning * hourlyRate).toLocaleString()} VND`,
-        `- Buổi chiều (12:00-18:00): ${hoursInAfternoon.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInAfternoon * hourlyRate).toLocaleString()} VND`,
-        `- Buổi tối (18:00-00:00): ${hoursInEvening.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInEvening * hourlyRate).toLocaleString()} VND`,
-        `- Qua đêm (00:00-06:00): ${hoursInNight.toFixed(2)} giờ x ${hourlyRate.toLocaleString()} = ${(hoursInNight * hourlyRate).toLocaleString()} VND`,
-        `- Tổng: ${totalPrice.toLocaleString()} VND (${totalHours.toFixed(2)} giờ)`
-      ];
-      setPriceDetailsLog(details);
-
-      setPriceInfo({
-        price: totalPrice,
-        currency: 'VND',
-        priceDetails: {
-          basePrice: totalPrice
-        }
-      });
-      
-      // Hiển thị tổng số giờ để người dùng kiểm tra
-      console.log('Tổng số giờ:', totalHours.toFixed(2));
-      setDailyDuration(`${Math.floor(totalHours)} giờ ${Math.round((totalHours % 1) * 60)} phút`);
-    } catch (error) {
-      console.error('Lỗi khi tính giá vé:', error);
-      // Fallback to fixed price
-      setPriceInfo({
-        price: 20000,
-        currency: 'VND',
-        priceDetails: {
-          basePrice: 20000
-        }
-      });
-      setPriceDetailsLog([]);
+    } catch (error: any) {
+      setPriceInfo(null);
+      Alert.alert('Lỗi', error.message || 'Không thể lấy giá vé.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Cập nhật hàm updatePriceInfo cho vé ngày
+  const updatePriceInfo = async () => {
+    if (dailyBookingDate !== 'Chưa chọn' && dailyStartTime !== 'Chưa chọn' && dailyEndTime !== 'Chưa chọn') {
+      // Chuyển đổi sang định dạng yyyy-mm-ddTHH:MM:SS
+      const [d, m, y] = dailyBookingDate.split('/');
+      const start = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dailyStartTime}:00`;
+      const end = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dailyEndTime}:00`;
+      await fetchPriceFromBackend('daily', start, end);
+    }
+  };
+
+  // Cập nhật hàm tính giá vé tháng
+  const calculateMonthlyPrice = async () => {
+    if (monthlyStartDate !== 'Chưa chọn') {
+      // Chuyển đổi sang định dạng yyyy-mm-ddTHH:MM:SS
+      const [d, m, y] = monthlyStartDate.split('/');
+      const start = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`;
+      // Kết thúc sau 30 ngày
+      const endDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
+      endDate.setDate(endDate.getDate() + 30);
+      const end = `${endDate.getFullYear()}-${(endDate.getMonth()+1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}T00:00:00`;
+      await fetchPriceFromBackend('monthly', start, end);
+    }
+  };
+
+  // Tự động gọi updatePriceInfo khi chọn lại ngày/giờ vé ngày
+  useEffect(() => {
+    if (
+      activeTab === 'daily' &&
+      dailyBookingDate !== 'Chưa chọn' &&
+      dailyStartTime !== 'Chưa chọn' &&
+      dailyEndTime !== 'Chưa chọn'
+    ) {
+      updatePriceInfo();
+    }
+    // eslint-disable-next-line
+  }, [activeTab, dailyBookingDate, dailyStartTime, dailyEndTime]);
+
+  // Tự động gọi calculateMonthlyPrice khi chọn ngày vé tháng
+  useEffect(() => {
+    if (
+      activeTab === 'monthly' &&
+      monthlyStartDate !== 'Chưa chọn'
+    ) {
+      calculateMonthlyPrice();
+    }
+    // eslint-disable-next-line
+  }, [activeTab, monthlyStartDate]);
+
+  // Khi quay về từ ChooseTime, cập nhật lại state thời gian và gọi tính giá
+  useEffect(() => {
+    if (route.params) {
+      if (route.params.bookingDate && route.params.startTime && route.params.endTime && route.params.duration) {
+        setDailyBookingDate(route.params.bookingDate);
+        setDailyStartTime(route.params.startTime);
+        setDailyEndTime(route.params.endTime);
+        setDailyDuration(route.params.duration);
+      }
+      if (route.params.monthlyStartDate) {
+        setMonthlyStartDate(route.params.monthlyStartDate);
+        // Tính ngày kết thúc vé tháng (30 ngày)
+        const [d, m, y] = route.params.monthlyStartDate.split('/');
+        const startDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 30);
+        setMonthlyEndDate(`${endDate.getDate()}/${endDate.getMonth() + 1}/${endDate.getFullYear()}`);
+      }
+    }
+  }, [route.params]);
 
   // Kiểm tra xem đã có thông tin thời gian chưa
   const hasTimeInfo = () => {
@@ -601,34 +555,20 @@ const BookingScreen: React.FC = () => {
       return;
     }
 
-    // Gọi API để lấy chi tiết khu vực
     fetchZoneDetails(zoneId);
   };
 
   const fetchZoneDetails = async (zoneId: number | string) => {
     try {
       setLoading(true);
-      console.log('Đang gọi API lấy chi tiết khu vực:', zoneId);
-      
-      // Gọi API để lấy chi tiết khu vực
       const response = await api.get(`/bookings/zones/${zoneId}`);
-      console.log('Response from zone details API:', response);
-      
       if (!response.success || !response.data) {
         throw new Error(`Không thể lấy chi tiết khu vực ${zoneId}`);
       }
-      
-      // Lấy chi tiết khu vực từ response
       const zoneDetails = response.data as ZoneDetailsResponse;
-      
-      console.log('Chi tiết khu vực:', zoneDetails);
-      
-      // Kiểm tra dữ liệu hợp lệ
       if (!zoneDetails.slots || !Array.isArray(zoneDetails.slots)) {
         throw new Error('Dữ liệu sơ đồ khu vực không hợp lệ');
       }
-      
-      // Chuyển đổi dữ liệu slots thành định dạng phù hợp cho sơ đồ
       const formattedSlots = zoneDetails.slots.map((slot: ZoneSlot) => ({
         id: slot.id,
         code: slot.code,
@@ -639,35 +579,71 @@ const BookingScreen: React.FC = () => {
         }
       }));
       
-      console.log('Đã map được sơ đồ khu vực');
-      console.log('Tổng số chỗ:', zoneDetails.totalSpots);
-      console.log('Số chỗ trống:', zoneDetails.availableSpots);
-      
-      // Lấy giá mỗi giờ từ priceInfo
-      const pricePerHour = 8000; // Giá mặc định
-      
-      // Tổng giá từ priceInfo
       const totalPrice = priceInfo ? priceInfo.price : 0;
-      
-      // Navigate to BarkingLayoutScreen with zone data
+      // Ghép ngày và giờ thành datetime ISO cho startTime, endTime
+      let dateStr = '';
+      let startTime = '';
+      let endTime = '';
+      if (activeTab === 'daily' && dailyBookingDate !== 'Chưa chọn') {
+        const [d, m, y] = dailyBookingDate.split('/');
+        const day = d.padStart(2, '0');
+        const month = m.padStart(2, '0');
+        dateStr = `${y}-${month}-${day}`;
+        if (dailyStartTime !== 'Chưa chọn') {
+          startTime = `${dateStr}T${dailyStartTime}:00`;
+        }
+        if (dailyEndTime !== 'Chưa chọn') {
+          endTime = `${dateStr}T${dailyEndTime}:00`;
+        }
+        if (startTime && endTime && endTime <= startTime) {
+          const endDateObj = new Date(endTime);
+          endDateObj.setDate(endDateObj.getDate() + 1);
+          endTime = endDateObj.toISOString().slice(0, 19);
+        }
+      } else if (activeTab === 'monthly') {
+        if (
+          typeof monthlyStartDate === 'string' &&
+          monthlyStartDate !== 'Chưa chọn' &&
+          monthlyStartDate.split('/').length === 3
+        ) {
+          const [d, m, y] = monthlyStartDate.split('/');
+          if (d && m && y) {
+            const day = d.padStart(2, '0');
+            const month = m.padStart(2, '0');
+            dateStr = `${y}-${month}-${day}`;
+            startTime = `${dateStr}T00:00:00`;
+            const endDate = new Date(`${y}-${month}-${day}T00:00:00`);
+            endDate.setDate(endDate.getDate() + 30);
+            const endMonth = (endDate.getMonth() + 1).toString().padStart(2, '0');
+            const endDay = endDate.getDate().toString().padStart(2, '0');
+            endTime = `${endDate.getFullYear()}-${endMonth}-${endDay}T23:59:59`;
+          } else {
+            Alert.alert('Lỗi', 'Ngày bắt đầu vé tháng không hợp lệ.');
+            setLoading(false);
+            return;
+          }
+        } else {
+          Alert.alert('Lỗi', 'Ngày bắt đầu vé tháng không hợp lệ.');
+          setLoading(false);
+          return;
+        }
+      }
       navigation.navigate('BarkingLayoutScreen', { 
         zoneId: zoneId.toString(),
         totalSpots: zoneDetails.totalSpots,
         availableSpots: zoneDetails.availableSpots,
         zoneData: JSON.stringify(formattedSlots),
-        pricePerHour: pricePerHour,
+   
         bookingDate: activeTab === 'daily' ? dailyBookingDate : monthlyStartDate,
-        startTime: activeTab === 'daily' ? dailyStartTime : '00:00',
-        endTime: activeTab === 'daily' ? dailyEndTime : '23:59',
+        startTime: startTime,
+        endTime: endTime,
         duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
-        totalPrice: totalPrice
+        totalPrice: totalPrice,
+        priceId: priceInfo?.priceId,
+        bookingType: activeTab
       });
     } catch (error: any) {
-      console.error(`Lỗi khi lấy chi tiết khu vực ${zoneId}:`, error);
-      Alert.alert(
-        'Lỗi',
-        error.message || 'Không thể tải thông tin chi tiết khu vực. Vui lòng thử lại sau.'
-      );
+      Alert.alert('Lỗi', error.message || 'Không thể tải thông tin chi tiết khu vực. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
@@ -690,7 +666,7 @@ const BookingScreen: React.FC = () => {
         startTime: activeTab === 'daily' ? dailyStartTime : '00:00',
         endTime: activeTab === 'daily' ? dailyEndTime : '23:59',
         duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
-        spotCode: spotCode || 'A01',
+        spotCode: spotCode ,
         totalPrice: priceInfo ? priceInfo.price : activeTab === 'monthly' ? 200000 : 20000,
         currency: 'VND',
         bookingType: activeTab,
@@ -738,93 +714,28 @@ const BookingScreen: React.FC = () => {
     }
   };
 
-  // Cập nhật hàm tính giá vé ngày dựa theo API
-  const updatePriceInfo = async () => {
-    if (dailyBookingDate !== 'Chưa chọn' && dailyStartTime !== 'Chưa chọn' && dailyEndTime !== 'Chưa chọn') {
-      try {
-        setLoading(true);
-        
-        // Format thời gian theo định dạng của calculateDefaultPrice
-        const formatTimeForCalculation = (dateStr: string, timeStr: string) => {
-          const [day, month, year] = dateStr.split('/');
-          return `${day}/${month}/${year} ${timeStr}`;
-        };
-        
-        const startDateTime = formatTimeForCalculation(dailyBookingDate, dailyStartTime);
-        const endDateTime = formatTimeForCalculation(dailyBookingDate, dailyEndTime);
-        
-        // Sử dụng phương pháp tính trực tiếp thay vì gọi API
-        calculateDefaultPrice(startDateTime, endDateTime);
-      } catch (error) {
-        console.error('Lỗi khi tính giá:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  // Hàm cập nhật thời lượng
-  const updateDuration = (startTime: string, endTime: string) => {
-    try {
-      const [startHour, startMinute] = startTime.split(':').map(Number);
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-      
-      let durationInMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
-      
-      // Xử lý trường hợp qua ngày
-      if (durationInMinutes < 0) {
-        durationInMinutes += 24 * 60;
-      }
-      
-      if (durationInMinutes > 0) {
-        const hours = Math.floor(durationInMinutes / 60);
-        const minutes = durationInMinutes % 60;
-        
-        let durationText = '';
-        if (hours > 0) {
-          durationText += `${hours} giờ `;
-        }
-        if (minutes > 0) {
-          durationText += `${minutes} phút`;
-        }
-        
-        setDailyDuration(durationText.trim());
-      }
-    } catch (e) {
-      console.error('Lỗi khi tính thời lượng:', e);
-    }
-  };
-
   const formatDate = (date: Date): string => {
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
   // Cập nhật hàm format biển số xe
   const formatLicensePlate = (text: string) => {
-    // Xóa tất cả ký tự không phải chữ và số
+    // Xóa ký tự không phải chữ/số
     text = text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    
-    // Tách các phần của biển số
-    const numbers1 = text.slice(0, 2).replace(/[^0-9]/g, ''); // 2 số đầu
-    const middle = text.slice(2, 4).replace(/[^A-Z0-9]/g, ''); // 1-2 ký tự giữa
-    const numbers2 = text.slice(4).replace(/[^0-9]/g, '').slice(0, 5); // 3-5 số cuối
-    
-    // Format để hiển thị trên UI
+    // 2 số đầu
+    const numbers1 = text.slice(0, 2);
+    // 1-2 ký tự giữa
+    const middle = text.slice(2, 4);
+    // 3-5 số cuối
+    const numbers2 = text.slice(4, 9);
+    // Ghép lại đúng định dạng
     let displayFormat = numbers1;
     if (middle) displayFormat += ` ${middle}`;
     if (numbers2) displayFormat += ` ${numbers2}`;
-    
-    // Format để gửi lên API (không có khoảng trắng)
-    const apiFormat = `${numbers1}${middle}${numbers2}`.trim();
-    
-    console.log('Format biển số:', {
-      display: displayFormat.trim(),
-      forApi: apiFormat
-    });
-    
+    // Trả về cho UI và API
     return {
       display: displayFormat.trim(),
-      api: apiFormat
+      api: displayFormat.trim()
     };
   };
 
@@ -1128,33 +1039,6 @@ const BookingScreen: React.FC = () => {
     } else if (tab === 'daily' && dailyBookingDate !== 'Chưa chọn' && 
                dailyStartTime !== 'Chưa chọn' && dailyEndTime !== 'Chưa chọn') {
       updatePriceInfo();
-    }
-  };
-
-  // Cập nhật hàm tính giá vé tháng
-  const calculateMonthlyPrice = async () => {
-    try {
-      setLoading(true);
-      
-      console.log('========= THÔNG TIN VÉ THÁNG =========');
-      console.log('Ngày bắt đầu:', monthlyStartDate);
-      const endDate = new Date(new Date(monthlyStartDate.split('/').reverse().join('-')));
-      endDate.setDate(endDate.getDate() + 30);
-      const formattedEndDate = `${endDate.getDate()}/${endDate.getMonth() + 1}/${endDate.getFullYear()}`;
- 
-      
-      // Sử dụng giá cố định cho vé tháng
-      setPriceInfo({
-        price: 200000,
-        currency: 'VND',
-        priceDetails: {
-          basePrice: 200000
-        }
-      });
-    } catch (error) {
-      console.error('Lỗi khi tính giá vé tháng:', error);
-    } finally {
-      setLoading(false);
     }
   };
 

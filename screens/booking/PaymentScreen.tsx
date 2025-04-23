@@ -37,12 +37,19 @@ const PaymentScreen: React.FC = () => {
     duration,
     bookingType,
     licensePlate,
-    phoneNumber
+    phoneNumber,
+    userName
+   
   } = route.params;
   
   const handlePaymentMethod = async (method: string) => {
     try {
       setIsProcessing(true);
+      
+      // Lấy thông tin user từ AsyncStorage
+      const userStr = await AsyncStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const fullName = user?.full_name || '';
       
       // Simulate API call for payment processing
       setTimeout(() => {
@@ -62,7 +69,20 @@ const PaymentScreen: React.FC = () => {
                   text: 'Đã thanh toán',
                   onPress: () => {
                     setQrCodeData(null);
-                    completePayment(method);
+                    navigation.replace('BookingConfirmationScreen', {
+                      bookingId,
+                      spotCode,
+                      zoneId,
+                      userName: fullName,        // Dùng tên đầy đủ từ user đã đăng nhập
+                      phoneNumber: phoneNumber || user?.phone || '',  // Dùng phone từ user nếu không có từ booking
+                      bookingDate,
+                      startTime,
+                      endTime,
+                      duration,
+                      bookingType,
+                      totalPrice,
+                      licensePlate
+                    });
                   },
                 },
                 {
@@ -75,8 +95,20 @@ const PaymentScreen: React.FC = () => {
             setIsProcessing(false);
           }, 1000);
         } else {
-          // For cash or bank card, just show success message
-          completePayment(method);
+          navigation.replace('BookingConfirmationScreen', {
+            bookingId,
+            spotCode,
+            zoneId,
+            userName: fullName,        // Dùng tên đầy đủ từ user đã đăng nhập
+            phoneNumber: phoneNumber || user?.phone || '',  // Dùng phone từ user nếu không có từ booking
+            bookingDate,
+            startTime,
+            endTime,
+            duration,
+            bookingType,
+            totalPrice,
+            licensePlate
+          });
           setIsProcessing(false);
         }
       }, 1500);
@@ -85,19 +117,6 @@ const PaymentScreen: React.FC = () => {
       Alert.alert('Lỗi', 'Không thể xử lý thanh toán. Vui lòng thử lại.');
       setIsProcessing(false);
     }
-  };
-  
-  const completePayment = (method: string) => {
-    Alert.alert(
-      'Thanh toán thành công',
-      `Bạn đã thanh toán thành công cho đặt chỗ ${bookingId} tại vị trí ${spotCode}, khu vực ${zoneId} với phương thức ${method}.`,
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.navigate('HomeScreen')
-        }
-      ]
-    );
   };
   
   return (
@@ -159,7 +178,7 @@ const PaymentScreen: React.FC = () => {
           )}
           <View style={styles.totalPriceRow}>
             <Text style={styles.totalPriceLabel}>Tổng tiền:</Text>
-            <Text style={styles.totalPriceValue}>{totalPrice.toLocaleString()} {currency}</Text>
+            <Text style={styles.totalPriceValue}>{Math.round(totalPrice).toLocaleString()} {currency}</Text>
           </View>
         </View>
         
@@ -415,4 +434,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PaymentScreen; 
+export default PaymentScreen;

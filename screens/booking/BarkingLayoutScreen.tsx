@@ -66,7 +66,7 @@ const BarkingLayoutScreen: React.FC = () => {
     totalSpots, 
     availableSpots, 
     zoneData,
-    pricePerHour = 8000,
+  
     bookingDate = '',
     monthlyStartDate = '',
     startTime = '',
@@ -117,12 +117,8 @@ const BarkingLayoutScreen: React.FC = () => {
   const handleSpotSelection = (spot: ParkingSpot) => {
     if (spot.status === 'available') {
       setSelectedSpot(spot);
-      
-      // Tính giá cho vị trí cụ thể (có thể thay đổi dựa trên vị trí - ví dụ có thể có các vị trí VIP đắt hơn)
-      // Đây chỉ là ví dụ - trong thực tế bạn có thể thay đổi logic này
-      const positionMultiplier = 1 + (spot.position.row * 0.05); // Hàng càng xa càng đắt
-      const calculatedPrice = Math.ceil(totalPrice * positionMultiplier / 1000) * 1000;
-      setSpotPrice(calculatedPrice);
+      // Luôn lấy giá đúng với tổng tiền từ BookingScreen, không nhân thêm hệ số vị trí
+      setSpotPrice(totalPrice);
     } else {
       Alert.alert('Không khả dụng', 'Vị trí này đã được đặt hoặc đang bảo trì.');
     }
@@ -132,61 +128,84 @@ const BarkingLayoutScreen: React.FC = () => {
   const handleConfirmSelection = async () => {
     if (selectedSpot) {
       setIsLoading(true);
-
       try {
-        // Tạo booking data để gửi đi
-        const bookingData = {
-          spotId: selectedSpot.id,
-          zoneId: zoneId,
-          bookingDate: bookingDate,
+        // Lấy user, licensePlate, phoneNumber từ AsyncStorage
+        const userRaw = await AsyncStorage.getItem('user');
+        const user = userRaw ? JSON.parse(userRaw) : null;
+        const licensePlate = await AsyncStorage.getItem('booking_license_plate');
+        const phoneNumber = await AsyncStorage.getItem('booking_phone_number');
+        // Lấy priceId từ route.params (được truyền từ BookingScreen)
+        const priceId = route.params?.priceId;
+        // Lấy ngày và giờ từ params
+        const bookingDate = route.params?.bookingDate; // dạng '23/4/2025'
+        let startTimeStr = route.params?.startTime;  // dạng '12:00' hoặc '2025-04-23T12:00'
+        let endTimeStr = route.params?.endTime;      // dạng '17:00' hoặc '2025-04-23T17:00'
+        // Chuyển bookingDate sang yyyy-MM-dd
+        let dateStr = '';
+        if (bookingDate && bookingDate !== 'Chưa chọn') {
+          const [d, m, y] = bookingDate.split('/');
+          const day = d.padStart(2, '0');
+          const month = m.padStart(2, '0');
+          dateStr = `${y}-${month}-${day}`;
+        }
+        // Nếu startTimeStr hoặc endTimeStr đã chứa ngày, chỉ lấy phần giờ phút
+        if (startTimeStr && startTimeStr.includes('T')) {
+          startTimeStr = startTimeStr.split('T')[1].slice(0,5);
+        }
+        if (endTimeStr && endTimeStr.includes('T')) {
+          endTimeStr = endTimeStr.split('T')[1].slice(0,5);
+        }
+        // Ghép ngày và giờ thành datetime ISO
+        let startTime = dateStr && startTimeStr && startTimeStr !== 'Chưa chọn'
+          ? `${dateStr}T${startTimeStr}:00`
+          : null;
+        let endTime = dateStr && endTimeStr && endTimeStr !== 'Chưa chọn'
+          ? `${dateStr}T${endTimeStr}:00`
+          : null;
+        // Nếu endTime <= startTime (qua đêm), cộng thêm 1 ngày cho endTime
+        if (startTime && endTime && endTime <= startTime) {
+          const endDateObj = new Date(endTime);
+          endDateObj.setDate(endDateObj.getDate() + 1);
+          const endMonth = (endDateObj.getMonth() + 1).toString().padStart(2, '0');
+          const endDay = endDateObj.getDate().toString().padStart(2, '0');
+          endTime = `${endDateObj.getFullYear()}-${endMonth}-${endDay}T${endDateObj.getHours().toString().padStart(2, '0')}:${endDateObj.getMinutes().toString().padStart(2, '0')}:${endDateObj.getSeconds().toString().padStart(2, '0')}`;
+        }
+        // Kiểm tra đủ thông tin bắt buộc
+        if (!user || !user.user_id || !selectedSpot.id || !priceId || !startTime || !endTime || !licensePlate || !phoneNumber) {
+          Alert.alert('Lỗi', 'Thiếu thông tin cần thiết để tạo booking. Vui lòng kiểm tra lại.');
+          setIsLoading(false);
+          return;
+        }
+        // Gọi API tạo booking với đủ thông tin
+        const response = await api.post('/bookings/create', {
+          userId: user.user_id,
+          slotId: selectedSpot.id,
+          priceId: priceId,
+          bookingType: route.params?.bookingType || 'daily',
           startTime: startTime,
           endTime: endTime,
-          duration: duration,
-          spotCode: selectedSpot.code,
-          totalPrice: spotPrice,
-          currency: 'VND',
-          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily',
-        };
-        
-        console.log('Tạo booking với thông tin:', JSON.stringify(bookingData, null, 2));
-
-        // Gọi API tạo booking
-        const response = await api.post('/bookings/create', bookingData);
-
-        console.log('Response từ API tạo booking:', JSON.stringify(response, null, 2));
-
-        if (!response.success) {
-          throw new Error(response.message || 'Không thể tạo đặt chỗ');
-        }
-
-        // Nhận bookingId và thông tin thanh toán từ API
-        const responseData = response.data as BookingCreationResponse;
-        const bookingId = responseData.bookingId.toString();
-        const amount = responseData.amount || spotPrice;
-        
-        console.log('Đã tạo booking thành công với ID:', bookingId);
-        
-        // Chuẩn bị data cho màn hình thanh toán
-        const paymentScreenData = {
+          licensePlate: licensePlate,
+          vehicleType: 'sedan',
+          phoneNumber: phoneNumber
+        });
+        const bookingData = response.data as BookingCreationResponse;
+        const bookingId = bookingData.bookingId.toString();
+        const amount = bookingData.amount || spotPrice;
+        navigation.navigate('PaymentScreen', {
           bookingId: bookingId,
           totalPrice: amount,
           currency: 'VND',
           spotCode: selectedSpot.code,
           zoneId: zoneId,
-          bookingDate: bookingDate,
+          bookingDate: route.params?.bookingDate,
           startTime: startTime,
           endTime: endTime,
-          duration: duration,
-          bookingType: bookingDate.includes('tháng') ? 'monthly' : 'daily' as 'monthly' | 'daily',
-          licensePlate: responseData.bookingDetails?.license_plate,
-          phoneNumber: responseData.bookingDetails?.phone
-        };
-        
-        console.log('Chuyển đến màn hình thanh toán với dữ liệu:', JSON.stringify(paymentScreenData, null, 2));
-        
-        // Chuyển đến màn hình thanh toán với bookingId
-        navigation.navigate('PaymentScreen', paymentScreenData);
-      } catch (error: any) {
+          duration: route.params?.duration,
+          bookingType: route.params?.bookingType || 'daily',
+          licensePlate: bookingData.bookingDetails?.license_plate,
+          phoneNumber: bookingData.bookingDetails?.phone
+        });
+      } catch (error) {
         console.error('Error creating booking:', error);
         let errorMessage = 'Không thể tạo đặt chỗ. Vui lòng thử lại.';
         
@@ -227,10 +246,14 @@ const BarkingLayoutScreen: React.FC = () => {
         {bookingDate && (
           <View style={styles.bookingInfoContainer}>
             <Text style={styles.bookingInfoText}>
-              Ngày: {bookingDate} • Thời gian: {startTime} - {endTime}
+              Ngày đặt: {bookingDate}
+               
+            </Text>
+            <Text style={styles.bookingInfoContainer}>
+               {startTime}
             </Text>
             <Text style={styles.bookingInfoText}>
-              ngày hết hạn {monthlyStartDate}
+              ngày hết hạn {endTime}
             </Text>
             <Text style={styles.bookingInfoText}>
               Thời lượng: {duration}
