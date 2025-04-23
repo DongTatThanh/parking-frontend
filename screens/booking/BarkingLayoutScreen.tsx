@@ -126,6 +126,8 @@ const BarkingLayoutScreen: React.FC = () => {
 
   // Handle selection confirmation
   const handleConfirmSelection = async () => {
+    console.log('Đã nhấn xác nhận');
+    console.log('selectedSpot:', selectedSpot);
     if (selectedSpot) {
       setIsLoading(true);
       try {
@@ -134,8 +136,11 @@ const BarkingLayoutScreen: React.FC = () => {
         const user = userRaw ? JSON.parse(userRaw) : null;
         const licensePlate = await AsyncStorage.getItem('booking_license_plate');
         const phoneNumber = await AsyncStorage.getItem('booking_phone_number');
-        // Lấy priceId từ route.params (được truyền từ BookingScreen)
         const priceId = route.params?.priceId;
+        console.log('DEBUG user:', user);
+        console.log('DEBUG priceId:', priceId);
+        console.log('DEBUG licensePlate:', licensePlate);
+        console.log('DEBUG phoneNumber:', phoneNumber);
         // Lấy ngày và giờ từ params
         const bookingDate = route.params?.bookingDate; // dạng '23/4/2025'
         let startTimeStr = route.params?.startTime;  // dạng '12:00' hoặc '2025-04-23T12:00'
@@ -191,7 +196,7 @@ const BarkingLayoutScreen: React.FC = () => {
         const bookingData = response.data as BookingCreationResponse;
         const bookingId = bookingData.bookingId.toString();
         const amount = bookingData.amount || spotPrice;
-        navigation.navigate('PaymentScreen', {
+        const paymentParams = {
           bookingId: bookingId,
           totalPrice: amount,
           currency: 'VND',
@@ -204,7 +209,9 @@ const BarkingLayoutScreen: React.FC = () => {
           bookingType: route.params?.bookingType || 'daily',
           licensePlate: bookingData.bookingDetails?.license_plate,
           phoneNumber: bookingData.bookingDetails?.phone
-        });
+        };
+        console.log('==[DEBUG]== Dữ liệu truyền sang PaymentScreen:', paymentParams);
+        navigation.navigate('PaymentScreen', paymentParams);
       } catch (error) {
         console.error('Error creating booking:', error);
         let errorMessage = 'Không thể tạo đặt chỗ. Vui lòng thử lại.';

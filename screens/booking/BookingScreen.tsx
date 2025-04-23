@@ -64,6 +64,7 @@ export type RootStackParamList = {
     bookingType?: 'daily' | 'monthly';
     licensePlate?: string;
     phoneNumber?: string;
+    qrCodeData?: string;
   };
 };
 
@@ -88,13 +89,10 @@ interface ZoneDetails extends ParkingZone {
 }
 
 interface PriceResponse {
-  price: number;
+  totalPrice: number;
+  pricePerUnit: number;
   currency: string;
-  priceDetails?: {
-    basePrice: number;
-    discounts?: { name: string; amount: number }[];
-    taxes?: { name: string; amount: number }[];
-  };
+  priceId?: number;
 }
 interface check_license_plate{
   licensePlate: string;
@@ -177,7 +175,7 @@ interface BookingCreationResponse {
     vehicle_type: string;
     slot_code: string;
     zone_name: string;
-    pricId: string;
+    price: string;
   };
   paymentId: number;
   amount: number;
@@ -386,6 +384,14 @@ const BookingScreen: React.FC = () => {
     fetchUser();
   }, []);
 
+  // Polling: Tự động cập nhật trạng thái khu vực đỗ xe mỗi 5 giây
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchParkingZones();
+    }, 5000); // 5 giây
+    return () => clearInterval(interval);
+  }, []);
+
   // Thêm hàm fetchParkingZones để gọi API lấy danh sách khu vực
   const fetchParkingZones = async () => {
     try {
@@ -431,14 +437,14 @@ const BookingScreen: React.FC = () => {
         startTime: start,
         endTime: end
       });
-      if (response.success && response.data) {
+      // Khai báo kiểu dữ liệu cho response.data để tránh lỗi TypeScript
+      const data = response.data as { totalPrice: number; pricePerUnit: number; currency: string; priceId?: number };
+      if (response.success && data) {
         setPriceInfo({
-          price: response.data.totalPrice,
-          currency: response.data.currency || 'VND',
-          priceId: response.data.priceId,
-          priceDetails: {
-            basePrice: response.data.pricePerUnit
-          }
+          totalPrice: data.totalPrice || 0,
+          pricePerUnit: data.pricePerUnit || 0,
+          currency: data.currency || 'VND',
+          priceId: data.priceId || undefined
         });
       } else {
         setPriceInfo(null);
@@ -454,26 +460,37 @@ const BookingScreen: React.FC = () => {
 
   // Cập nhật hàm updatePriceInfo cho vé ngày
   const updatePriceInfo = async () => {
-    if (dailyBookingDate !== 'Chưa chọn' && dailyStartTime !== 'Chưa chọn' && dailyEndTime !== 'Chưa chọn') {
-      // Chuyển đổi sang định dạng yyyy-mm-ddTHH:MM:SS
+    if (
+      dailyBookingDate &&
+      dailyBookingDate !== 'Chưa chọn' &&
+      dailyBookingDate.split('/').length === 3 &&
+      dailyStartTime !== 'Chưa chọn' &&
+      dailyEndTime !== 'Chưa chọn'
+    ) {
       const [d, m, y] = dailyBookingDate.split('/');
-      const start = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dailyStartTime}:00`;
-      const end = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dailyEndTime}:00`;
-      await fetchPriceFromBackend('daily', start, end);
+      if (d && m && y) {
+        const start = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dailyStartTime}:00`;
+        const end = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${dailyEndTime}:00`;
+        await fetchPriceFromBackend('daily', start, end);
+      }
     }
   };
 
   // Cập nhật hàm tính giá vé tháng
   const calculateMonthlyPrice = async () => {
-    if (monthlyStartDate !== 'Chưa chọn') {
-      // Chuyển đổi sang định dạng yyyy-mm-ddTHH:MM:SS
+    if (
+      monthlyStartDate &&
+      monthlyStartDate !== 'Chưa chọn' &&
+      monthlyStartDate.split('/').length === 3
+    ) {
       const [d, m, y] = monthlyStartDate.split('/');
-      const start = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`;
-      // Kết thúc sau 30 ngày
-      const endDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
-      endDate.setDate(endDate.getDate() + 30);
-      const end = `${endDate.getFullYear()}-${(endDate.getMonth()+1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}T00:00:00`;
-      await fetchPriceFromBackend('monthly', start, end);
+      if (d && m && y) {
+        const start = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`;
+        const endDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
+        endDate.setDate(endDate.getDate() + 30);
+        const end = `${endDate.getFullYear()}-${(endDate.getMonth()+1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}T00:00:00`;
+        await fetchPriceFromBackend('monthly', start, end);
+      }
     }
   };
 
@@ -511,14 +528,31 @@ const BookingScreen: React.FC = () => {
         setDailyDuration(route.params.duration);
       }
       if (route.params.monthlyStartDate) {
-        setMonthlyStartDate(route.params.monthlyStartDate);
-        // Tính ngày kết thúc vé tháng (30 ngày)
-        const [d, m, y] = route.params.monthlyStartDate.split('/');
-        const startDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 30);
-        setMonthlyEndDate(`${endDate.getDate()}/${endDate.getMonth() + 1}/${endDate.getFullYear()}`);
+        let startDate: Date | null = null;
+        if (route.params.monthlyStartDate.includes('T')) {
+          // Chuỗi ISO
+          startDate = new Date(route.params.monthlyStartDate);
+          setMonthlyStartDate(`${startDate.getDate()}/${startDate.getMonth() + 1}/${startDate.getFullYear()}`);
+        } else if (route.params.monthlyStartDate.split('/').length === 3) {
+          // Định dạng dd/mm/yyyy
+          const [d, m, y] = route.params.monthlyStartDate.split('/');
+          startDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
+          setMonthlyStartDate(route.params.monthlyStartDate);
+        }
+        if (startDate) {
+          const endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + 30);
+          setMonthlyEndDate(`${endDate.getDate()}/${endDate.getMonth() + 1}/${endDate.getFullYear()}`);
+        }
       }
+    }
+  }, [route.params]);
+
+  // Đảm bảo khi xác nhận thời gian đặt vé tháng, app vẫn ở tab vé tháng và tự động tính giá
+  useEffect(() => {
+    if (route.params?.ticketType === 'monthly') {
+      setActiveTab('monthly');
+      calculateMonthlyPrice();
     }
   }, [route.params]);
 
@@ -538,6 +572,30 @@ const BookingScreen: React.FC = () => {
 
   // Hàm để chọn khu vực đỗ xe
   const handleZoneSelection = (zoneId: number) => {
+    if (activeTab === 'daily') {
+      // Chỉ kiểm tra nếu ngày đặt là hôm nay
+      const today = new Date();
+      const [d, m, y] = dailyBookingDate.split('/');
+      const bookingDate = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
+      const now = new Date();
+
+      if (
+        bookingDate.getFullYear() === today.getFullYear() &&
+        bookingDate.getMonth() === today.getMonth() &&
+        bookingDate.getDate() === today.getDate()
+      ) {
+        // Ghép giờ kết thúc
+        const [endHour, endMinute] = dailyEndTime.split(':').map(Number);
+        const bookingEnd = new Date(bookingDate);
+        bookingEnd.setHours(endHour, endMinute, 0, 0);
+
+        if (bookingEnd <= now) {
+          Alert.alert('Lỗi', 'Khung giờ kết thúc phải lớn hơn thời gian hiện tại!');
+          return;
+        }
+      }
+    }
+
     if (!hasTimeInfo()) {
       Alert.alert('Thông báo', 'Vui lòng chọn thời gian đặt chỗ trước khi chọn khu vực đỗ xe');
       return;
@@ -578,27 +636,31 @@ const BookingScreen: React.FC = () => {
           col: slot.position_x
         }
       }));
-      
-      const totalPrice = priceInfo ? priceInfo.price : 0;
+      const totalPrice = priceInfo ? priceInfo.totalPrice : 0;
       // Ghép ngày và giờ thành datetime ISO cho startTime, endTime
       let dateStr = '';
       let startTime = '';
       let endTime = '';
       if (activeTab === 'daily' && dailyBookingDate !== 'Chưa chọn') {
-        const [d, m, y] = dailyBookingDate.split('/');
-        const day = d.padStart(2, '0');
-        const month = m.padStart(2, '0');
-        dateStr = `${y}-${month}-${day}`;
-        if (dailyStartTime !== 'Chưa chọn') {
-          startTime = `${dateStr}T${dailyStartTime}:00`;
-        }
-        if (dailyEndTime !== 'Chưa chọn') {
-          endTime = `${dateStr}T${dailyEndTime}:00`;
-        }
-        if (startTime && endTime && endTime <= startTime) {
-          const endDateObj = new Date(endTime);
-          endDateObj.setDate(endDateObj.getDate() + 1);
-          endTime = endDateObj.toISOString().slice(0, 19);
+        const parts = dailyBookingDate.split('/');
+        if (parts.length === 3) {
+          const [d, m, y] = parts;
+          if (d && m && y) {
+            const day = d.padStart(2, '0');
+            const month = m.padStart(2, '0');
+            dateStr = `${y}-${month}-${day}`;
+            if (dailyStartTime !== 'Chưa chọn') {
+              startTime = `${dateStr}T${dailyStartTime}:00`;
+            }
+            if (dailyEndTime !== 'Chưa chọn') {
+              endTime = `${dateStr}T${dailyEndTime}:00`;
+            }
+            if (startTime && endTime && endTime <= startTime) {
+              const endDateObj = new Date(endTime);
+              endDateObj.setDate(endDateObj.getDate() + 1);
+              endTime = endDateObj.toISOString().slice(0, 19);
+            }
+          }
         }
       } else if (activeTab === 'monthly') {
         if (
@@ -633,14 +695,13 @@ const BookingScreen: React.FC = () => {
         totalSpots: zoneDetails.totalSpots,
         availableSpots: zoneDetails.availableSpots,
         zoneData: JSON.stringify(formattedSlots),
-   
         bookingDate: activeTab === 'daily' ? dailyBookingDate : monthlyStartDate,
         startTime: startTime,
         endTime: endTime,
         duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
         totalPrice: totalPrice,
-        priceId: priceInfo?.priceId,
-        bookingType: activeTab
+        pricePerHour: priceInfo ? priceInfo.pricePerUnit : 0,
+        priceId: priceInfo?.priceId // Truyền thêm priceId nếu cần
       });
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể tải thông tin chi tiết khu vực. Vui lòng thử lại sau.');
@@ -658,20 +719,27 @@ const BookingScreen: React.FC = () => {
       console.log('Dữ liệu nhận vào:', { spotId, zoneId, spotCode });
       console.log('Loại vé:', activeTab);
       
-      // Tạo booking với API
-      const response = await api.post('/bookings/create', {
+      // Log dữ liệu gửi lên API tạo booking
+      const bookingPayload = {
         spotId: spotId,
         zoneId: zoneId,
         bookingDate: activeTab === 'daily' ? dailyBookingDate : monthlyStartDate,
         startTime: activeTab === 'daily' ? dailyStartTime : '00:00',
         endTime: activeTab === 'daily' ? dailyEndTime : '23:59',
         duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
-        spotCode: spotCode ,
-        totalPrice: priceInfo ? priceInfo.price : activeTab === 'monthly' ? 200000 : 20000,
+        spotCode: spotCode,
+        totalPrice: priceInfo ? priceInfo.totalPrice : activeTab === 'monthly' ? 200000 : 20000,
         currency: 'VND',
         bookingType: activeTab,
-      });
-      
+        // Thêm các trường cần thiết
+        userId: userId,
+        priceId: priceInfo && priceInfo.priceId ? priceInfo.priceId : undefined,
+        licensePlate: licensePlate,
+        phoneNumber: phoneNumber
+      };
+      console.log('Booking payload gửi lên API:', bookingPayload);
+      // Tạo booking với API
+      const response = await api.post('/bookings/create', bookingPayload);
       console.log('Response từ API tạo booking:', response);
       
       if (!response.success) {
@@ -681,7 +749,8 @@ const BookingScreen: React.FC = () => {
       // Nhận bookingId và thông tin thanh toán từ API
       const bookingData = response.data as BookingCreationResponse;
       const bookingId = bookingData.bookingId.toString();
-      const amount = bookingData.amount || (priceInfo ? priceInfo.price : 0);
+      const amount = bookingData.amount || (priceInfo ? priceInfo.totalPrice : 0);
+      const qrCode = bookingData.qrCode || bookingData.bookingDetails?.qr_code || undefined;
       
       console.log('Đã tạo booking thành công với ID:', bookingId);
 
@@ -699,7 +768,8 @@ const BookingScreen: React.FC = () => {
         duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
         bookingType: activeTab,
         licensePlate: licensePlate || bookingData.bookingDetails?.license_plate,
-        phoneNumber: phoneNumber || bookingData.bookingDetails?.phone
+        phoneNumber: phoneNumber || bookingData.bookingDetails?.phone,
+        qrCodeData: qrCode // truyền mã QR sang màn hình thanh toán
       };
       
       console.log('Chuyển đến màn hình thanh toán với dữ liệu:', paymentData);
@@ -986,7 +1056,7 @@ const BookingScreen: React.FC = () => {
       {priceInfo && (
         <View style={styles.priceContainer}>
           <Text style={styles.priceLabel}>Giá vé:</Text>
-          <Text style={styles.priceValue}>{priceInfo.price.toLocaleString()} {priceInfo.currency}</Text>
+          <Text style={styles.priceValue}>{priceInfo.totalPrice.toLocaleString()} {priceInfo.currency}</Text>
         </View>
       )}
     </View>
@@ -1018,6 +1088,12 @@ const BookingScreen: React.FC = () => {
           <Text style={styles.durationValue}>
             {monthlyStartDate} - {monthlyEndDate}
           </Text>
+        </View>
+      )}
+      {activeTab === 'monthly' && priceInfo && (
+        <View style={styles.priceContainer}>
+          <Text style={styles.priceLabel}>Giá vé tháng:</Text>
+          <Text style={styles.priceValue}>{priceInfo.totalPrice.toLocaleString()} {priceInfo.currency}</Text>
         </View>
       )}
     </View>

@@ -14,6 +14,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../../api/axiosConfig'; // Corrected import path
 
 type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'PaymentScreen'>;
 
@@ -67,22 +68,35 @@ const PaymentScreen: React.FC = () => {
               [
                 {
                   text: 'Đã thanh toán',
-                  onPress: () => {
+                  onPress: async () => {
                     setQrCodeData(null);
-                    navigation.replace('BookingConfirmationScreen', {
-                      bookingId,
-                      spotCode,
-                      zoneId,
-                      userName: fullName,        // Dùng tên đầy đủ từ user đã đăng nhập
-                      phoneNumber: phoneNumber || user?.phone || '',  // Dùng phone từ user nếu không có từ booking
-                      bookingDate,
-                      startTime,
-                      endTime,
-                      duration,
-                      bookingType,
-                      totalPrice,
-                      licensePlate
-                    });
+                    try {
+                      // Gọi API xác nhận thanh toán
+                      const res = await api.post('/bookings/confirm-payment', {
+                        bookingId: bookingId || '',
+                        paymentStatus: 'completed'
+                      });
+                      if (res.success) {
+                        navigation.replace('BookingConfirmationScreen', {
+                          bookingId: bookingId || '',
+                          spotCode: spotCode || '',
+                          zoneId: zoneId || '',
+                          userName: fullName || userName || '',
+                          phoneNumber: phoneNumber || user?.phone || '',
+                          bookingDate: bookingDate || '',
+                          startTime: startTime || '',
+                          endTime: endTime || '',
+                          duration: duration || '',
+                          bookingType: bookingType || undefined,
+                          totalPrice: totalPrice || 0,
+                          licensePlate: licensePlate || '',
+                        });
+                      } else {
+                        Alert.alert('Lỗi', res.message || 'Không thể xác nhận thanh toán.');
+                      }
+                    } catch (error) {
+                      Alert.alert('Lỗi', error.message || 'Không thể xác nhận thanh toán.');
+                    }
                   },
                 },
                 {
@@ -96,18 +110,18 @@ const PaymentScreen: React.FC = () => {
           }, 1000);
         } else {
           navigation.replace('BookingConfirmationScreen', {
-            bookingId,
-            spotCode,
-            zoneId,
-            userName: fullName,        // Dùng tên đầy đủ từ user đã đăng nhập
-            phoneNumber: phoneNumber || user?.phone || '',  // Dùng phone từ user nếu không có từ booking
-            bookingDate,
-            startTime,
-            endTime,
-            duration,
-            bookingType,
-            totalPrice,
-            licensePlate
+            bookingId: bookingId || '',
+            spotCode: spotCode || '',
+            zoneId: zoneId || '',
+            userName: fullName || userName || '',
+            phoneNumber: phoneNumber || user?.phone || '',
+            bookingDate: bookingDate || '',
+            startTime: startTime || '',
+            endTime: endTime || '',
+            duration: duration || '',
+            bookingType: bookingType || undefined,
+            totalPrice: totalPrice || 0,
+            licensePlate: licensePlate || ''
           });
           setIsProcessing(false);
         }

@@ -33,27 +33,20 @@ const RegisterScreen = () => {
 
   // Validate form data
   const validateForm = () => {
-    if (!formData.fullName.trim()  && formData.fullName.length < 6) {
-      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên họ tên phải lớn hơn 6 chữ số ');
+    if (!formData.fullName.trim() || formData.fullName.length < 6) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên (tối thiểu 6 ký tự)');
       return false;
     }
-    if (formData.fullName.length < 6) {
-      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên họ tên phải lớn hơn 6 chữ số ');
-      return false;
-    }
-    
     if (!formData.email.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập email');
       return false;
     }
-    
     // Email validation regex
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       Alert.alert('Lỗi', 'Email không hợp lệ');
       return false;
     }
-    
     if (!formData.phone.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại');
       return false;
@@ -62,19 +55,16 @@ const RegisterScreen = () => {
       Alert.alert('Lỗi', 'Số điện thoại phải gồm đúng 10 chữ số');
       return false;
     }
-    
     if (formData.password.length < 6) {
       Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
       return false;
     }
-    
     if (formData.password !== formData.confirmPassword) {
       Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
       return false;
     }
-    
     return true;
-  }
+  };
 
   // Handle registration
   const handleRegister = async () => {

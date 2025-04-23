@@ -32,6 +32,8 @@ export type RootStackParamList = {
     endTime?: string;
     duration?: string;
     totalPrice?: number;
+    priceId?: number;
+    bookingType?: 'daily' | 'monthly';
   };
   PaymentScreen: {
     bookingId: string;
@@ -46,6 +48,21 @@ export type RootStackParamList = {
     bookingType?: 'daily' | 'monthly';
     licensePlate?: string;
     phoneNumber?: string;
+    userName?: string;
+  };
+  BookingConfirmationScreen: {
+    bookingId: string;
+    spotCode: string;
+    zoneId: string;
+    userName?: string;
+    phoneNumber?: string;
+    bookingDate?: string;
+    startTime?: string;
+    endTime?: string;
+    duration?: string;
+    bookingType?: 'daily' | 'monthly';
+    totalPrice?: number;
+    licensePlate?: string;
   };
   HomeScreen: undefined;
   InsuranceScreen: undefined;

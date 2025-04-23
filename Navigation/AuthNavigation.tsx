@@ -16,6 +16,7 @@ import BookingConfirmationScreen from '@/screens/booking/BookingConfirmationScre
 import SpecialOffersScreen from '@/screens/SpecialOffersScreen';
 import ChooseTime from "../screens/booking/ChooseTime"
 ;
+import ResetPasswordScreen from '@/screens/auth/ResetPasword';
 
 const Stack = createStackNavigator();
 
@@ -66,7 +67,9 @@ const AuthNavigation = () => {
      />
      <Stack.Screen name='ChooseTime' component={ChooseTime}/>
     
-    
+  
+     <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+     <Stack.Screen name="ForgetPassword" component={ForgetPasswordScreen} />
     </Stack.Navigator>
   );
 };

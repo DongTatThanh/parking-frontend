@@ -53,15 +53,30 @@ const ChooseTime: React.FC = () => {
     }
   };
 
-  const toggleTimeSlot = (slotId: string) => {
-    // Kiểm tra nếu khung giờ đã được chọn
-    if (selectedTimeSlots.includes(slotId)) {
-      // Nếu đã chọn, loại bỏ khỏi danh sách
-      setSelectedTimeSlots(selectedTimeSlots.filter(id => id !== slotId));
-    } else {
-      // Nếu chưa chọn, thêm vào danh sách
-      setSelectedTimeSlots([...selectedTimeSlots, slotId]);
+  // Kiểm tra các ca được chọn có liền mạch không
+  const isContinuous = (slots: string[]) => {
+    if (slots.length <= 1) return true;
+    const indices = slots
+      .map(id => TIME_SLOTS.findIndex(slot => slot.id === id))
+      .sort((a, b) => a - b);
+    for (let i = 1; i < indices.length; i++) {
+      if (indices[i] - indices[i - 1] !== 1) return false;
     }
+    return true;
+  };
+
+  const toggleTimeSlot = (slotId: string) => {
+    let newSelected;
+    if (selectedTimeSlots.includes(slotId)) {
+      newSelected = selectedTimeSlots.filter(id => id !== slotId);
+    } else {
+      newSelected = [...selectedTimeSlots, slotId];
+    }
+    if (!isContinuous(newSelected)) {
+      Alert.alert('Lỗi', 'Chỉ được chọn các ca liền kề nhau!');
+      return;
+    }
+    setSelectedTimeSlots(newSelected);
   };
 
   // Tính thời gian bắt đầu và kết thúc dựa trên các khung giờ đã chọn
@@ -142,6 +157,7 @@ const ChooseTime: React.FC = () => {
       navigation.navigate('BookingScreen', {
         monthlyStartDate: selectedStartDate.toISOString(),
         ticketType: 'monthly'
+        
       });
     }
   };

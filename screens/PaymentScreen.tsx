@@ -13,8 +13,9 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../Navigation/types';
+import api from '../api/axiosConfig';
 
-type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'PaymentScreen'>;
+type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'BookingConfirmationScreen'>;
 
 const PaymentScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -69,20 +70,37 @@ const PaymentScreen: React.FC = () => {
       return;
     }
 
-    Alert.alert(
-      'Thanh toán thành công',
-      `Cảm ơn bạn đã sử dụng dịch vụ TÌM BÃI NHANH.\nMã đặt chỗ: ${bookingCode}\nSố tiền: ${totalAmount} VND\nHạn sử dụng: ${expiryTime}`,
-      [
-        {
-          text: 'Xem hóa đơn',
-          onPress: () => navigation.navigate('HistoryScreen' as never),
-        },
-        {
-          text: 'Về trang chủ',
-          onPress: () => navigation.navigate('HomeScreen' as never),
-        },
-      ]
-    );
+    // Chuyển hướng sang màn hình xác nhận đặt chỗ sau khi thanh toán thành công
+    navigation.replace('BookingConfirmationScreen', {
+      spotId,
+      bookingCode,
+      userName,
+      phone,
+      bookingTime,
+      ticketType,
+      expiryTime,
+      totalAmount,
+    });
+  };
+
+  const handlePaymentSuccess = async () => {
+    try {
+      // Gọi API xác nhận thanh toán
+      const res = await api.post('/bookings/confirm-payment', {
+        bookingId: route.params?.bookingId, // id của booking vừa thanh toán
+        paymentStatus: 'completed',
+      });
+      if (res.success) {
+        Alert.alert('Thành công', 'Thanh toán thành công! Bạn có thể lấy mã QR check-in/check-out.');
+        // Sau khi xác nhận thanh toán, cập nhật trạng thái payment_status trong bảng payments
+        // và chuyển sang màn hình xác nhận đặt chỗ để lấy mã QR
+        navigation.navigate('BookingConfirmationScreen', { bookingId: route.params?.bookingId });
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể xác nhận thanh toán.');
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể xác nhận thanh toán.');
+    }
   };
 
   return (
@@ -182,6 +200,10 @@ const PaymentScreen: React.FC = () => {
             onPress={handlePaymentConfirm}
           >
             <Text style={styles.confirmButtonText}>Xác nhận thanh toán</Text>
+          </TouchableOpacity>
+          {/* Payment Success Button */}
+          <TouchableOpacity style={styles.button} onPress={handlePaymentSuccess}>
+            <Text style={styles.buttonText}>Đã thanh toán</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -336,6 +358,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#d1d5db',
   },
   confirmButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  button: {
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  buttonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',

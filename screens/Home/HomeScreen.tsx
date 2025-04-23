@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -69,18 +70,37 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ title, image, screen }) => 
   return (
     <TouchableOpacity 
       style={styles.categoryCard}
-      onPress={() => {
+      onPress={async () => {
         if (screen === 'BookingConfirmationScreen') {
-          // Lấy dữ liệu booking gần nhất từ AsyncStorage (nếu có)
-          AsyncStorage.getItem('last_booking').then((bookingStr) => {
-            if (bookingStr) {
+          const bookingStr = await AsyncStorage.getItem('last_booking');
+          if (bookingStr) {
+            try {
               const booking = JSON.parse(bookingStr);
-              navigation.navigate(screen, booking);
-            } else {
-              // Nếu chưa có booking, không hiển thị thông tin
-              navigation.navigate(screen, null);
+              // Kiểm tra nếu booking có đủ dữ liệu cần thiết
+              if (booking && booking.bookingId) {
+                navigation.navigate(screen, {
+                  bookingId: booking.bookingId || '',
+                  spotCode: booking.spotCode || '',
+                  zoneId: booking.zoneId || '',
+                  bookingDate: booking.bookingDate || '',
+                  startTime: booking.startTime || '',
+                  endTime: booking.endTime || '',
+                  duration: booking.duration || '',
+                  bookingType: booking.bookingType || '',
+                  totalPrice: booking.totalPrice || 0,
+                  licensePlate: booking.licensePlate || '',
+                  phoneNumber: booking.phoneNumber || '',
+                  userName: booking.userName || ''
+                });
+              } else {
+                Alert.alert('Thông báo', 'Dữ liệu đặt chỗ không hợp lệ!');
+              }
+            } catch (e) {
+              Alert.alert('Thông báo', 'Không thể đọc dữ liệu đặt chỗ!');
             }
-          });
+          } else {
+            Alert.alert('Thông báo', 'Bạn chưa có đặt chỗ nào gần đây!');
+          }
         } else {
           navigation.navigate(screen);
         }
