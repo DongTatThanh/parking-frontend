@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Cấu hình mặc định cho axios
 const instance = axios.create({
@@ -11,18 +12,15 @@ const instance = axios.create({
 
 // Xử lý lỗi request
 instance.interceptors.request.use(
-  (config) => {
-    console.log('API Request:', {
-      url: config.url,
-      method: config.method,
-      data: config.data,
-    });
+  async (config) => {
+    const token = await AsyncStorage.getItem('auth_token');
+    if (token && config.headers) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+      console.log('Token gửi lên:', token);
+    }
     return config;
   },
-  (error) => {
-    console.error('Request Error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Xử lý lỗi response
@@ -107,4 +105,4 @@ instance.interceptors.response.use(
   }
 );
 
-export default instance; 
+export default instance;

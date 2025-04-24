@@ -60,14 +60,11 @@ const LoginScreen = () => {
       // Kiểm tra response theo cấu trúc từ backend
       if (response.success && response.data?.token && response.data?.user) {
         console.log('Đăng nhập thành công với user:', response.data.user);
-        
-        // Lưu token vào AsyncStorage
-        await AsyncStorage.setItem('userToken', response.data.token);
-        
-        // Lưu và cập nhật thông tin người dùng vào context
+        // Lưu token vào AsyncStorage với key 'auth_token' (chuẩn cho interceptor)
+        await AsyncStorage.setItem('auth_token', response.data.token);
+        // Lưu user vào AsyncStorage
         await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
         setUser(response.data.user);
-        
         Alert.alert(
           'Thành công',
           response.message || 'Đăng nhập thành công!',
