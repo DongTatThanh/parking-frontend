@@ -77,8 +77,12 @@ export type RootStackParamList = {
   LoginScreen: undefined;
   ForgetPasswordScreen: undefined;
   TabNavigator: undefined;
-};
 
+  ServicesScreen: {id: string};
+
+
+  };
+  
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;

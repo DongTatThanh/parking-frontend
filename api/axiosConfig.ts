@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Cấu hình mặc định cho axios
 const instance = axios.create({
-  baseURL: 'http://192.168.0.101:3000/api',
+  baseURL: 'http://172.20.10.4:3000/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -16,7 +16,6 @@ instance.interceptors.request.use(
     const token = await AsyncStorage.getItem('auth_token');
     if (token && config.headers) {
       config.headers['Authorization'] = `Bearer ${token}`;
-      console.log('Token gửi lên:', token);
     }
     return config;
   },
@@ -26,12 +25,6 @@ instance.interceptors.request.use(
 // Xử lý lỗi response
 instance.interceptors.response.use(
   (response) => {
-    console.log('API Response:', {
-      url: response.config.url,
-      status: response.status,
-      data: response.data,
-    });
-
     // Kiểm tra cấu trúc response
     if (response.data && typeof response.data === 'object') {
       // Xử lý đặc biệt cho API đăng nhập/đăng ký

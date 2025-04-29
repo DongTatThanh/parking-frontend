@@ -3,6 +3,8 @@ import { SplashScreen } from '@/screens';
 import { StatusBar } from 'react-native';
 import MainNavigator from "../Navigation/MainNavigator";
 import { useAsyncStorage } from '@react-native-async-storage/async-storage';
+import { WebSocketProvider } from '../context/WebSocketContext';
+import { UserProvider } from '../context/UserContext';
 
 const Index = () => {
   const [isShowSplash, setIsShowSplash] = useState(true);
@@ -28,12 +30,15 @@ const Index = () => {
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" translucent={false} />
+      <UserProvider>
+        <WebSocketProvider>
       {isShowSplash ? (
         <SplashScreen />
       ) : (
         <MainNavigator />
-      )
-      }
+          )}
+        </WebSocketProvider>
+      </UserProvider>
     </>
   );
 };

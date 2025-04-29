@@ -18,6 +18,11 @@ import api from '../../api/axiosConfig'; // Corrected import path
 
 type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'PaymentScreen'>;
 
+interface PaymentResponse {
+  success: boolean;
+  message?: string;
+}
+
 const PaymentScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<PaymentScreenRouteProp>();
@@ -52,79 +57,71 @@ const PaymentScreen: React.FC = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const fullName = user?.full_name || '';
       
-      // Simulate API call for payment processing
+      // Giả lập quá trình thanh toán
       setTimeout(() => {
         // Store payment method in AsyncStorage for history
-        AsyncStorage.setItem('last_payment_method', method).catch(console.error);
-        
-        // If method is digital payment, show QR code
-        if (['MoMo', 'ZaloPay'].includes(method)) {
-          setQrCodeData('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJQAAACUCAYAAAB1PADUAAAAAklEQVR4AewaftIAAATTSURBVO3BQY4cSRIEQdNA/f/Lun30UwCJ9GpyuCaCP1K15KRq0UnVopOqRSdVi06qFp1ULTqpWnRSteikatFJ1aKTqkUnVYtOqhadVC06qVr0yUtAfpOaJ4C8oWYCMql5Asik5gbIb1LzxknVopOqRSdViz5ZpmYTkCeA3Ki5ATIBuQFyo2ZSMwGZ1Nyo2QRk00nVopOqRSdViz75MiBPqHkCyKTmCSA3ajYB2QTkCTXfdFK16KRq0UnVok/+cUCeUDMBuVEzAblRMwH5l5xULTqpWnRSteiT/zNqJiA3am6APAFkUvMvOaladFK16KRq0SdfpuY3AZnU3Kh5AsiNmt+k5m9yUrXopGrRSdWiT5YB+ZPUTEAmNROQN9Q8AWRSMwG5UfNNQL5JzQ2QGzVvnFQtOqladFK1CH9kEZBJzQRkk5rfBGRS8waQSc0EZFJzA+RGzTedVC06qVp0UrXokz9MzQRkUjMBuQHyhpoJyA2QSc0EZFLzhJobIDdqJiA3at44qVp0UrXopGoR/sgXAZnUPAFkUjMBmdRMQG7UPAFkUjMBeULNBGRS8waQSc03nVQtOqladFK1CH/kBSBPqJmATGpugPxJaiYgk5obIJOaGyBvqLkBMql546Rq0UnVopOqRfgjLwCZ1ExAnlAzAZnUPAHkRs0E5Ak1E5BJzTcBmdTcAJnUbDqpWnRSteikahH+yAtAJjW/CciNmieATGomIDdqboA8oeYJIJOa33RSteikatFJ1SL8kReATGomIE+omYDcqHkCyKTmBsgbam6AbFIzAZnUfNNJ1aKTqkUnVYvwR/7DgExqJiBPqNkEZFIzAZnUPAHkRs0NkEnNGydVi06qFp1ULfrkJSC/Sc2k5g01TwCZ1NyomYA8AWRSc6NmAnKjZtNJ1aKTqkUnVYs+WaZmE5AbIDdqJiATkEnNBGRS85vUvKFmAvJNJ1WLTqoWnVQt+uTLgDyh5m+iZgIyqZmA3KiZgExA3gByo+abTqoWnVQtOqla9EldAZnUTEBu1NyomYBMaiYgk5ongNyoeeOkatFJ1aKTqkWf/OOAPAFkUjMBuVEzAZnU3KiZgExqJiCTmgnIjZpNJ1WLTqoWnVQt+uTL1HyTmgnIpOYGyKTmRs0bQN4A8oSaCcg3nVQtOqladFK16JNlQH4TkCeA3AD5JjVvAJnU3ACZ1HzTSdWik6pFJ1WL8EeqlpxULTqpWnRSteikatFJ1aKTqkUnVYtOqhadVC06qVp0UrXopGrRSdWik6pFJ1WL/gfOKj4ur80SFQAAAABJRU5ErkJggg==');
-          
-          setTimeout(() => {
-            Alert.alert(
-              'Quét mã QR',
-              `Vui lòng quét mã QR bằng ứng dụng ${method} để thanh toán.`,
-              [
-                {
-                  text: 'Đã thanh toán',
-                  onPress: async () => {
-                    setQrCodeData(null);
-                    try {
-                      // Gọi API xác nhận thanh toán
-                      const res = await api.post('/bookings/confirm-payment', {
-                        bookingId: bookingId || '',
-                        paymentStatus: 'completed'
-                      });
-                      if (res.success) {
-                        navigation.replace('BookingConfirmationScreen', {
-                          bookingId: bookingId || '',
-                          spotCode: spotCode || '',
-                          zoneId: zoneId || '',
-                          userName: fullName || userName || '',
-                          phoneNumber: phoneNumber || user?.phone || '',
-                          bookingDate: bookingDate || '',
-                          startTime: startTime || '',
-                          endTime: endTime || '',
-                          duration: duration || '',
-                          bookingType: bookingType || undefined,
-                          totalPrice: totalPrice || 0,
-                          licensePlate: licensePlate || '',
-                        });
-                      } else {
-                        Alert.alert('Lỗi', res.message || 'Không thể xác nhận thanh toán.');
-                      }
-                    } catch (error) {
-                      Alert.alert('Lỗi', error.message || 'Không thể xác nhận thanh toán.');
+        setTimeout(() => {
+          Alert.alert(
+            'Quét mã QR',
+            `Vui lòng quét mã QR bằng ứng dụng ${method} để thanh toán.`,
+            [
+              {
+                text: 'Đã thanh toán',
+                onPress: async () => {
+                  setQrCodeData(null);
+                  try {
+                    // Gọi API xác nhận thanh toán
+                    const res = await api.post('/bookings/confirm-payment', {
+                      bookingId: bookingId || '',
+                      paymentStatus: 'completed'
+                    });
+                    if (res.success) {
+                      Alert.alert(
+                        'Thanh toán thành công',
+                        'Bạn có muốn xem thông tin đặt chỗ không?',
+                        [
+                          {
+                            text: 'Xem thông tin',
+                            onPress: () => {
+                              navigation.replace('BookingConfirmationScreen', {
+                                bookingId: bookingId || '',
+                                spotCode: spotCode || '',
+                                zoneId: zoneId || '',
+                                userName: fullName || userName || '',
+                                phoneNumber: phoneNumber || user?.phone || '',
+                                bookingDate: bookingDate || '',
+                                startTime: startTime || '',
+                                endTime: endTime || '',
+                                duration: duration || '',
+                                bookingType: bookingType || undefined,
+                                totalPrice: totalPrice || 0,
+                                licensePlate: licensePlate || '',
+                              });
+                            }
+                          },
+                          {
+                            text: 'Đóng',
+                            style: 'cancel'
+                          }
+                        ]
+                      );
+                    } else {
+                      Alert.alert('Lỗi', res.message || 'Không thể xác nhận thanh toán.');
                     }
-                  },
+                  } catch (error) {
+                    Alert.alert('Lỗi', error.message || 'Không thể xác nhận thanh toán.');
+                  }
                 },
-                {
-                  text: 'Hủy',
-                  style: 'cancel',
-                  onPress: () => setQrCodeData(null),
-                },
-              ]
-            );
-            setIsProcessing(false);
-          }, 1000);
-        } else {
-          navigation.replace('BookingConfirmationScreen', {
-            bookingId: bookingId || '',
-            spotCode: spotCode || '',
-            zoneId: zoneId || '',
-            userName: fullName || userName || '',
-            phoneNumber: phoneNumber || user?.phone || '',
-            bookingDate: bookingDate || '',
-            startTime: startTime || '',
-            endTime: endTime || '',
-            duration: duration || '',
-            bookingType: bookingType || undefined,
-            totalPrice: totalPrice || 0,
-            licensePlate: licensePlate || ''
-          });
+              },
+              {
+                text: 'Hủy',
+                style: 'cancel',
+                onPress: () => setQrCodeData(null),
+              },
+            ]
+          );
           setIsProcessing(false);
-        }
+        }, 1000);
       }, 1500);
     } catch (error) {
       console.error('Lỗi khi xử lý thanh toán:', error);

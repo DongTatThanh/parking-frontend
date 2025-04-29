@@ -102,7 +102,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ title, image, screen }) => 
             Alert.alert('Thông báo', 'Bạn chưa có đặt chỗ nào gần đây!');
           }
         } else {
-          navigation.navigate(screen);
+          navigation.navigate(screen as any);
         }
       }}
     >

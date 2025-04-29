@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, ActivityIndicator, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, Image, ActivityIndicator, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import api from '../../api/axiosConfig';
 import { useRoute } from '@react-navigation/native';
 
@@ -8,6 +8,7 @@ const BookingConfirmationScreen = () => {
   const { bookingId, spotCode, zoneId, bookingDate, startTime, endTime, duration, bookingType, totalPrice, licensePlate, phoneNumber, userName } = route.params || {};
   const [qrData, setQrData] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const fetchQr = async () => {
@@ -16,10 +17,29 @@ const BookingConfirmationScreen = () => {
           setLoading(false);
           return;
         }
+        console.log('Fetching QR code for booking ID:', bookingId);
         const res = await api.get(`/bookings/invoice/${bookingId}`);
-        // Giả sử backend trả về { qrCode: 'chuỗi hoặc link ảnh' }
-        setQrData(res.qrCode || res.data?.qrCode || null);
+        console.log('QR code API response:', JSON.stringify(res.data));
+        
+        // Check for QR code in different possible locations in the response
+        const qrCode = res.data?.qrCode || res.data?.qrcode || 
+                       res.data?.data?.qrCode || res.data?.data?.qrcode ||
+                       res.data?.bookingDetails?.qr_code;
+                       
+        if (qrCode) {
+          // Check if it's already a data URI (base64)
+          if (qrCode.startsWith('data:image')) {
+            setQrData(qrCode);
+          } else {
+            // If it's just a code/identifier, it might need to be requested as an image
+            setQrData(`data:image/png;base64,${qrCode}`);
+          }
+        } else {
+          console.error('QR code not found in response:', res.data);
+          setQrData(null);
+        }
       } catch (e) {
+        console.error('Error fetching QR code:', e);
         setQrData(null);
         Alert.alert('Lỗi', 'Không thể lấy mã QR. Hãy chắc chắn bạn đã thanh toán thành công!');
       } finally {
@@ -65,6 +85,15 @@ const styles = StyleSheet.create({
   qrTitle: { fontSize: 20, fontWeight: '600', marginBottom: 12, color: '#333', textAlign: 'center' },
   qrImage: { width: 220, height: 220, alignSelf: 'center', marginBottom: 12 },
   qrError: { color: '#ef4444', fontSize: 15, textAlign: 'center', marginTop: 12 },
+  qrErrorContainer: { alignItems: 'center', padding: 16 },
+  retryButton: { 
+    backgroundColor: '#3b82f6', 
+    paddingVertical: 8, 
+    paddingHorizontal: 16, 
+    borderRadius: 8, 
+    marginTop: 12 
+  },
+  retryButtonText: { color: '#fff', fontWeight: 'bold' },
 });
 
 export default BookingConfirmationScreen;

@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } f
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // URL của server API
-const BASE_URL = 'http://192.168.0.101:3000/api';
+const BASE_URL = 'http://172.20.10.4:3000/api';
 
 // Interface cho API Response
 export interface ApiResponse<T> {
@@ -29,7 +29,6 @@ axiosInstance.interceptors.request.use(
       if (token) {
         config.headers['Authorization'] = `Bearer ${token}`;
       }
-      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
       return config;
     } catch (error) {
       console.error('Error in request interceptor:', error);
@@ -45,7 +44,6 @@ axiosInstance.interceptors.request.use(
 // Interceptor cho response - xử lý lỗi, refresh token, etc.
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
-    console.log(`API Response [${response.status}]:`, response.data);
     return response;
   },
   async (error: AxiosError) => {

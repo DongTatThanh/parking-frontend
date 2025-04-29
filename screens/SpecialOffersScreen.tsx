@@ -24,7 +24,7 @@ const specialOffers = [
     description: 'Giảm 50% cho lần đặt chỗ đầu tiên của bạn',
     image: require("../assets/images/a.jpg"),
     discount: '50%',
-    validUntil: '31/12/2023',
+    validUntil: '31/12/2026', // cập nhật ngày mới xa hơn để luôn còn hiệu lực
     code: 'NEWUSER50',
   },
   {
@@ -33,7 +33,7 @@ const specialOffers = [
     description: 'Giảm 30% cho đặt chỗ vào cuối tuần',
     image: require("../assets/images/logo1.png"),
     discount: '30%',
-    validUntil: '31/12/2023',
+    validUntil: '31/12/2026', // cập nhật ngày mới xa hơn để luôn còn hiệu lực
     code: 'WEEKEND30',
   },
   {
@@ -42,7 +42,7 @@ const specialOffers = [
     description: 'Giảm 20% khi đăng ký vé gửi xe tháng',
     image: require("../assets/images/a.jpg"),
     discount: '20%',
-    validUntil: '31/12/2023',
+    validUntil: '31/12/2026', // cập nhật ngày mới xa hơn để luôn còn hiệu lực
     code: 'MONTHLY20',
   },
 ];

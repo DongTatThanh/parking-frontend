@@ -8,204 +8,286 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  StatusBar,
+  ActivityIndicator
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../Navigation/types';
-import api from '../api/axiosConfig';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from "../api/axiosConfig"
 
-type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'BookingConfirmationScreen'>;
+type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'PaymentScreen'>;
 
 const PaymentScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<PaymentScreenRouteProp>();
-  const {
-    spotId,
-    bookingCode,
-    userName,
-    phone,
-    bookingTime,
-    ticketType,
-    expiryTime,
-    totalAmount,
+  
+  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const { 
+    bookingId, 
+    totalPrice, 
+    currency = 'VND', 
+    spotCode, 
+    zoneId,
+    bookingDate,
+    startTime,
+    endTime,
+    duration,
+    bookingType,
+    licensePlate,
+    phoneNumber,
+    userName
   } = route.params;
-
-  const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
-
-  const paymentMethods = [
-    {
-      id: 'momo',
-      name: 'Ví MoMo',
-      icon: require('../assets/images/momo.jpg'),
-      color: '#ae2070',
-    },
-    {
-      id: 'zalopay',
-      name: 'ZaloPay',
-      icon: require('../assets/images/zalopay.jpg'),
-      color: '#0068ff',
-    },
-    {
-      id: 'vnpay',
-      name: 'VNPay',
-      icon: require('../assets/images/vnpay.jpg'),
-      color: '#0a5cbd',
-    },
-    {
-      id: 'bank',
-      name: 'Thẻ ngân hàng',
-      icon: '🏦',
-      color: '#2c7a7b',
-    },
-  ];
-
-  const handlePaymentSelect = (methodId: string) => {
-    setSelectedMethod(methodId);
-  };
-
-  const handlePaymentConfirm = () => {
-    if (!selectedMethod) {
-      Alert.alert('Thông báo', 'Vui lòng chọn phương thức thanh toán');
-      return;
-    }
-
-    // Chuyển hướng sang màn hình xác nhận đặt chỗ sau khi thanh toán thành công
-    navigation.replace('BookingConfirmationScreen', {
-      spotId,
-      bookingCode,
-      userName,
-      phone,
-      bookingTime,
-      ticketType,
-      expiryTime,
-      totalAmount,
-    });
-  };
-
-  const handlePaymentSuccess = async () => {
+  
+  // Save booking details for later retrieval
+  const saveBookingToStorage = async () => {
     try {
-      // Gọi API xác nhận thanh toán
-      const res = await api.post('/bookings/confirm-payment', {
-        bookingId: route.params?.bookingId, // id của booking vừa thanh toán
-        paymentStatus: 'completed',
-      });
-      if (res.success) {
-        Alert.alert('Thành công', 'Thanh toán thành công! Bạn có thể lấy mã QR check-in/check-out.');
-        // Sau khi xác nhận thanh toán, cập nhật trạng thái payment_status trong bảng payments
-        // và chuyển sang màn hình xác nhận đặt chỗ để lấy mã QR
-        navigation.navigate('BookingConfirmationScreen', { bookingId: route.params?.bookingId });
-      } else {
-        Alert.alert('Lỗi', res.message || 'Không thể xác nhận thanh toán.');
-      }
-    } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Không thể xác nhận thanh toán.');
+      const bookingDetails = {
+        bookingId,
+        spotCode,
+        zoneId,
+        bookingDate,
+        startTime,
+        endTime,
+        duration,
+        bookingType,
+        totalPrice,
+        licensePlate,
+        phoneNumber,
+        userName,
+        paymentDate: new Date().toISOString()
+      };
+      await AsyncStorage.setItem('last_booking', JSON.stringify(bookingDetails));
+    } catch (error) {
+      console.error('Error saving booking details:', error);
     }
   };
-
+  
+  const handlePaymentMethod = async (method: string) => {
+    try {
+      setIsProcessing(true);
+      
+      // Lấy thông tin user từ AsyncStorage
+      const userStr = await AsyncStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const fullName = user?.full_name || '';
+      
+      // Simulate payment processing
+      setTimeout(() => {
+        Alert.alert(
+          `Thanh toán qua ${method}`,
+          `Vui lòng xác nhận thanh toán ${Math.round(totalPrice).toLocaleString()} ${currency} cho đặt chỗ ${spotCode}.`,
+          [
+            {
+              text: 'Đã thanh toán',
+              onPress: async () => {
+                try {
+                  // Gọi API xác nhận thanh toán theo đúng định dạng backend mong đợi
+                  const response = await api.post('/bookings/confirm-payment', {
+                    bookingId: bookingId,
+                    paymentStatus: 'completed'
+                  });
+                  
+                  if (response.data.success) {
+                    // Lưu thông tin booking để sau này truy cập
+                    await saveBookingToStorage();
+                    
+                    Alert.alert(
+                      'Thanh toán thành công',
+                      'Bạn có muốn xem thông tin đặt chỗ không?',
+                      [
+                        {
+                          text: 'Xem thông tin',
+                          onPress: () => {
+                            navigation.replace('BookingConfirmationScreen', {
+                              bookingId,
+                              spotCode,
+                              zoneId,
+                              userName: fullName || userName || '',
+                              phoneNumber: phoneNumber || user?.phone || '',
+                              bookingDate: bookingDate || '',
+                              startTime: startTime || '',
+                              endTime: endTime || '',
+                              duration: duration || '',
+                              bookingType: bookingType || 'daily',
+                              totalPrice: totalPrice || 0,
+                              licensePlate: licensePlate || '',
+                            });
+                          }
+                        },
+                        {
+                          text: 'Về trang chủ',
+                          onPress: () => navigation.navigate('HomeScreen')
+                        }
+                      ]
+                    );
+                  } else {
+                    Alert.alert('Lỗi', response.data.message || 'Không thể xác nhận thanh toán.');
+                  }
+                } catch (error: any) {
+                  console.error('Payment confirmation error:', error);
+                  Alert.alert('Lỗi', error.message || 'Không thể xác nhận thanh toán. Vui lòng thử lại.');
+                } finally {
+                  setIsProcessing(false);
+                }
+              },
+            },
+            {
+              text: 'Hủy',
+              style: 'cancel',
+              onPress: () => setIsProcessing(false),
+            },
+          ]
+        );
+      }, 1500);
+    } catch (error) {
+      console.error('Lỗi khi xử lý thanh toán:', error);
+      Alert.alert('Lỗi', 'Không thể xử lý thanh toán. Vui lòng thử lại.');
+      setIsProcessing(false);
+    }
+  };
+  
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <TouchableOpacity
+        <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Text style={styles.backButtonText}>← Quay lại</Text>
         </TouchableOpacity>
+        
         <Text style={styles.headerTitle}>Thanh toán</Text>
+        <Text style={styles.headerSubtitle}>
+          Chọn phương thức thanh toán
+        </Text>
       </View>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          {/* Order Summary */}
-          <View style={styles.orderSummary}>
-            <Text style={styles.sectionTitle}>Chi tiết đơn hàng</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Vị trí đỗ xe:</Text>
-              <Text style={styles.summaryValue}>{spotId}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Mã đặt chỗ:</Text>
-              <Text style={styles.summaryValue}>{bookingCode}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tên người dùng:</Text>
-              <Text style={styles.summaryValue}>{userName}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Số điện thoại:</Text>
-              <Text style={styles.summaryValue}>{phone}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Thời gian đặt:</Text>
-              <Text style={styles.summaryValue}>{bookingTime}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Loại vé:</Text>
-              <Text style={styles.summaryValue}>{ticketType}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Hạn sử dụng:</Text>
-              <Text style={styles.summaryValue}>{expiryTime}</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.summaryRow}>
-              <Text style={styles.totalLabel}>Tổng cộng:</Text>
-              <Text style={styles.totalValue}>{totalAmount} VND</Text>
-            </View>
+      
+      <ScrollView style={styles.content}>
+        <View style={styles.bookingInfo}>
+          <Text style={styles.bookingTitle}>Thông tin đặt chỗ</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Mã đặt chỗ:</Text>
+            <Text style={styles.infoValue}>{bookingId}</Text>
           </View>
-          {/* Payment Methods */}
-          <View style={styles.paymentMethods}>
-            <Text style={styles.sectionTitle}>Phương thức thanh toán</Text>
-            {paymentMethods.map((method) => (
-              <TouchableOpacity
-                key={method.id}
-                style={[
-                  styles.paymentMethod,
-                  selectedMethod === method.id && styles.selectedPayment,
-                  { borderLeftColor: method.color, borderLeftWidth: 4 },
-                ]}
-                onPress={() => handlePaymentSelect(method.id)}
-              >
-                <View style={styles.methodInfo}>
-                  <Text style={styles.methodIcon}>{method.icon}</Text>
-                  <Text style={styles.methodName}>{method.name}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.radioButton,
-                    selectedMethod === method.id && styles.radioButtonSelected,
-                  ]}
-                >
-                  {selectedMethod === method.id && (
-                    <View style={styles.radioButtonInner} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Loại vé:</Text>
+            <Text style={styles.infoValue}>{bookingType === 'daily' ? 'Vé ngày' : 'Vé tháng'}</Text>
           </View>
-          {/* Payment Terms */}
-          <View style={styles.termsContainer}>
-            <Text style={styles.termsText}>
-              Bằng cách tiếp tục, bạn đồng ý với các điều khoản thanh toán và chính sách hoàn tiền của chúng tôi.
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Ngày đặt:</Text>
+            <Text style={styles.infoValue}>{bookingDate || 'Không có thông tin'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Thời gian:</Text>
+            <Text style={styles.infoValue}>{startTime || '00:00'} - {endTime || '23:59'}</Text>
+          </View>
+          {duration && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Thời lượng:</Text>
+              <Text style={styles.infoValue}>{duration}</Text>
+            </View>
+          )}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Vị trí:</Text>
+            <Text style={styles.infoValue}>{spotCode}, Khu {zoneId}</Text>
+          </View>
+          {licensePlate && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Biển số xe:</Text>
+              <Text style={styles.infoValue}>{licensePlate}</Text>
+            </View>
+          )}
+          {phoneNumber && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Số điện thoại:</Text>
+              <Text style={styles.infoValue}>{phoneNumber}</Text>
+            </View>
+          )}
+          <View style={styles.totalPriceRow}>
+            <Text style={styles.totalPriceLabel}>Tổng tiền:</Text>
+            <Text style={styles.totalPriceValue}>{Math.round(totalPrice).toLocaleString()} {currency}</Text>
+          </View>
+        </View>
+        
+        {qrCodeData && (
+          <View style={styles.qrCodeContainer}>
+            <Text style={styles.qrCodeTitle}>Quét mã QR để thanh toán</Text>
+            <Image 
+              source={{ uri: qrCodeData }}
+              style={styles.qrCode}
+              resizeMode="contain"
+            />
+            <Text style={styles.qrCodeInstructions}>
+              Sử dụng ứng dụng ví điện tử để quét mã QR và hoàn tất thanh toán
             </Text>
           </View>
-          {/* Confirm Button */}
-          <TouchableOpacity
-            style={[
-              styles.confirmButton,
-              !selectedMethod && styles.confirmButtonDisabled,
-            ]}
-            disabled={!selectedMethod}
-            onPress={handlePaymentConfirm}
-          >
-            <Text style={styles.confirmButtonText}>Xác nhận thanh toán</Text>
-          </TouchableOpacity>
-          {/* Payment Success Button */}
-          <TouchableOpacity style={styles.button} onPress={handlePaymentSuccess}>
-            <Text style={styles.buttonText}>Đã thanh toán</Text>
-          </TouchableOpacity>
-        </View>
+        )}
+        
+        <Text style={styles.sectionTitle}>Phương thức thanh toán</Text>
+        
+        {isProcessing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Đang xử lý thanh toán...</Text>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('MoMo')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>💰</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>MoMo</Text>
+                <Text style={styles.paymentDescription}>Thanh toán qua ví điện tử MoMo</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('ZaloPay')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>💳</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>ZaloPay</Text>
+                <Text style={styles.paymentDescription}>Thanh toán qua ví điện tử ZaloPay</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('Thẻ ngân hàng')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>🏦</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>Thẻ ngân hàng</Text>
+                <Text style={styles.paymentDescription}>Thanh toán qua thẻ ATM/Visa/Mastercard</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.paymentMethod}
+              onPress={() => handlePaymentMethod('Tiền mặt')}
+            >
+              <View style={styles.paymentIcon}>
+                <Text style={{fontSize: 24}}>💵</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Text style={styles.paymentTitle}>Tiền mặt</Text>
+                <Text style={styles.paymentDescription}>Thanh toán khi đến bãi đỗ xe</Text>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -218,10 +300,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 16,
-    paddingTop: 8,
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   backButton: {
     marginBottom: 12,
@@ -233,22 +312,68 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 4,
     color: '#333',
   },
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 4,
+  },
   content: {
+    flex: 1,
     padding: 16,
   },
-  orderSummary: {
+  bookingInfo: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  bookingTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#333',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontSize: 15,
+    color: '#666',
+  },
+  infoValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333',
+  },
+  totalPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  totalPriceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalPriceValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#047857',
   },
   sectionTitle: {
     fontSize: 18,
@@ -256,123 +381,85 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: '#333',
   },
-  summaryRow: {
+  paymentMethod: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  summaryLabel: {
-    fontSize: 15,
-    color: '#555',
-  },
-  summaryValue: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#333',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 12,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  paymentMethods: {
+    alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
-  paymentMethod: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    marginBottom: 8,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    borderLeftWidth: 3,
-  },
-  selectedPayment: {
-    backgroundColor: '#f0f9ff',
-  },
-  methodInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  methodIcon: {
-    fontSize: 24,
-    marginRight: 16,
-  },
-  methodName: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  radioButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#ccc',
+  paymentIcon: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
-  radioButtonSelected: {
-    borderColor: '#10b981',
+  paymentInfo: {
+    flex: 1,
   },
-  radioButtonInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10b981',
+  paymentTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
-  termsContainer: {
-    marginBottom: 24,
+  paymentDescription: {
+    fontSize: 14,
+    color: '#666',
   },
-  termsText: {
+  qrCodeContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  qrCodeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#333',
+  },
+  qrCode: {
+    width: 200,
+    height: 200,
+    marginBottom: 16,
+  },
+  qrCodeInstructions: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    lineHeight: 20,
   },
-  confirmButton: {
-    backgroundColor: '#10b981',
-    borderRadius: 8,
-    paddingVertical: 16,
+  loadingContainer: {
+    padding: 20,
     alignItems: 'center',
-    marginBottom: 24,
+    justifyContent: 'center',
   },
-  confirmButtonDisabled: {
-    backgroundColor: '#d1d5db',
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  button: {
-    backgroundColor: '#10b981',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
   },
 });
 

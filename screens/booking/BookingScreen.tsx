@@ -42,7 +42,7 @@ export type RootStackParamList = {
     totalSpots: number;
     availableSpots: number;
     zoneData: string;
-    pricePerHour: number;
+    priceId: number;
     bookingDate: string;
     startTime: string;
     endTime: string;
@@ -208,6 +208,33 @@ const ProgressBar: React.FC<{ progress: number, color: string }> = ({ progress, 
   );
 };
 
+// Add new interface for the multi-timeslot API response
+interface MultiTimeSlotResponse {
+  zone: {
+    id: number;
+    name: string;
+    totalSpots: number;
+    availableSpots: number;
+  };
+  layout?: {
+    layout_type: string;
+    grid_rows: number;
+    grid_cols: number;
+    layout_data: any;
+  };
+  date: string;
+  time_slots: Array<{
+    time: string;
+    slots: Array<{
+      id: number;
+      code: string;
+      status: string;
+      position_x: number;
+      position_y: number;
+    }>;
+  }>;
+}
+
 const BookingScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'BookingScreen'>>();
@@ -283,18 +310,39 @@ const BookingScreen: React.FC = () => {
   // Lưu dữ liệu người dùng vào AsyncStorage
   const saveUserInputToStorage = async () => {
     try {
+      console.log('Saving user input to AsyncStorage:', {
+        licensePlate,
+        isLicensePlateConfirmed,
+        phoneNumber,
+        isPhoneNumberConfirmed
+      });
+      
       if (licensePlate) {
+        // Save under both old and new keys for compatibility
         await AsyncStorage.setItem('booking_license_plate', licensePlate);
+        await AsyncStorage.setItem('license_plate', licensePlate);
+        console.log('License plate saved:', licensePlate);
       }
+      
       if (isLicensePlateConfirmed) {
         await AsyncStorage.setItem('booking_license_plate_confirmed', 'true');
       }
+      
       if (phoneNumber) {
+        // Save under both old and new keys for compatibility
         await AsyncStorage.setItem('booking_phone_number', phoneNumber);
+        await AsyncStorage.setItem('phone_number', phoneNumber);
+        console.log('Phone number saved:', phoneNumber);
       }
+      
       if (isPhoneNumberConfirmed) {
         await AsyncStorage.setItem('booking_phone_number_confirmed', 'true');
       }
+      
+      // List all AsyncStorage keys for debugging
+      const allKeys = await AsyncStorage.getAllKeys();
+      console.log('All AsyncStorage keys after saving:', allKeys);
+      
       console.log('Đã lưu dữ liệu người dùng vào AsyncStorage');
     } catch (error) {
       console.error('Lỗi khi lưu dữ liệu:', error);
@@ -396,10 +444,8 @@ const BookingScreen: React.FC = () => {
   const fetchParkingZones = async () => {
     try {
       setLoading(true);
-      console.log('Đang gọi API lấy danh sách khu vực đỗ xe');
       
       const response = await api.get<{ success: boolean; data: ParkingZone[] }>('/bookings/zones');
-      console.log('Response from API:', response);
       
       if (response.success && Array.isArray(response.data)) {
         setParkingZones(response.data);
@@ -619,89 +665,135 @@ const BookingScreen: React.FC = () => {
   const fetchZoneDetails = async (zoneId: number | string) => {
     try {
       setLoading(true);
-      const response = await api.get(`/bookings/zones/${zoneId}`);
-      if (!response.success || !response.data) {
-        throw new Error(`Không thể lấy chi tiết khu vực ${zoneId}`);
-      }
-      const zoneDetails = response.data as ZoneDetailsResponse;
-      if (!zoneDetails.slots || !Array.isArray(zoneDetails.slots)) {
-        throw new Error('Dữ liệu sơ đồ khu vực không hợp lệ');
-      }
-      const formattedSlots = zoneDetails.slots.map((slot: ZoneSlot) => ({
-        id: slot.id,
-        code: slot.code,
-        status: slot.status || 'available',
-        position: {
-          row: slot.position_y,
-          col: slot.position_x
-        }
-      }));
-      const totalPrice = priceInfo ? priceInfo.totalPrice : 0;
-      // Ghép ngày và giờ thành datetime ISO cho startTime, endTime
+      // Collect time information
       let dateStr = '';
       let startTime = '';
       let endTime = '';
-      if (activeTab === 'daily' && dailyBookingDate !== 'Chưa chọn') {
-        const parts = dailyBookingDate.split('/');
-        if (parts.length === 3) {
-          const [d, m, y] = parts;
-          if (d && m && y) {
-            const day = d.padStart(2, '0');
-            const month = m.padStart(2, '0');
-            dateStr = `${y}-${month}-${day}`;
-            if (dailyStartTime !== 'Chưa chọn') {
-              startTime = `${dateStr}T${dailyStartTime}:00`;
+      
+      if (activeTab === 'daily') {
+        console.log('Daily tab selected, date input:', dailyBookingDate);
+        console.log('Time inputs:', { startTime: dailyStartTime, endTime: dailyEndTime });
+        
+        if (dailyBookingDate && dailyBookingDate !== 'Chưa chọn' && dailyStartTime && dailyEndTime) {
+          // Parse date parts
+          const dateParts = dailyBookingDate.split('/');
+          console.log('Date parts after split:', dateParts);
+          
+          if (dateParts.length === 3) {
+            const [d, m, y] = dateParts;
+            console.log('Day, Month, Year:', { d, m, y });
+            
+            // Check that each value exists before using padStart
+            if (d && m && y) {
+              try {
+                const day = d.padStart(2, '0');
+                const month = m.padStart(2, '0');
+                dateStr = `${y}-${month}-${day}`;
+                startTime = dailyStartTime;
+                endTime = dailyEndTime;
+                console.log('Formatted date:', dateStr);
+              } catch (error: any) {
+                console.error('Error formatting date:', error);
+                console.error('Day:', d, 'Month:', m, 'Year:', y);
+                Alert.alert('Lỗi', 'Lỗi định dạng ngày: ' + error.message);
+                setLoading(false);
+                return;
+              }
+            } else {
+              console.error('Invalid date parts:', { d, m, y });
+              Alert.alert('Lỗi', 'Ngày đặt chỗ không hợp lệ.');
+              setLoading(false);
+              return;
             }
-            if (dailyEndTime !== 'Chưa chọn') {
-              endTime = `${dateStr}T${dailyEndTime}:00`;
-            }
-            if (startTime && endTime && endTime <= startTime) {
-              const endDateObj = new Date(endTime);
-              endDateObj.setDate(endDateObj.getDate() + 1);
-              endTime = endDateObj.toISOString().slice(0, 19);
-            }
+          } else {
+            console.error('Invalid date format:', dailyBookingDate);
+            Alert.alert('Lỗi', 'Định dạng ngày không hợp lệ. Cần định dạng DD/MM/YYYY.');
+            setLoading(false);
+            return;
           }
+        } else {
+          console.error('Missing required date/time inputs:', { 
+            date: dailyBookingDate, 
+            startTime: dailyStartTime, 
+            endTime: dailyEndTime 
+          });
+          Alert.alert('Lỗi', 'Vui lòng chọn ngày và giờ đặt chỗ.');
+          setLoading(false);
+          return;
         }
       } else if (activeTab === 'monthly') {
+        console.log('Monthly tab selected, date input:', monthlyStartDate);
+        
         if (
           typeof monthlyStartDate === 'string' &&
           monthlyStartDate !== 'Chưa chọn' &&
           monthlyStartDate.split('/').length === 3
         ) {
-          const [d, m, y] = monthlyStartDate.split('/');
-          if (d && m && y) {
-            const day = d.padStart(2, '0');
-            const month = m.padStart(2, '0');
-            dateStr = `${y}-${month}-${day}`;
-            startTime = `${dateStr}T00:00:00`;
-            const endDate = new Date(`${y}-${month}-${day}T00:00:00`);
-            endDate.setDate(endDate.getDate() + 30);
-            const endMonth = (endDate.getMonth() + 1).toString().padStart(2, '0');
-            const endDay = endDate.getDate().toString().padStart(2, '0');
-            endTime = `${endDate.getFullYear()}-${endMonth}-${endDay}T23:59:59`;
+          const dateParts = monthlyStartDate.split('/');
+          console.log('Monthly date parts:', dateParts);
+          
+          // Make sure we have 3 parts and they're all defined
+          if (dateParts.length === 3 && dateParts[0] && dateParts[1] && dateParts[2]) {
+            try {
+              const [d, m, y] = dateParts;
+              console.log('Monthly day, month, year:', { d, m, y });
+              
+              const day = d.padStart(2, '0');
+              const month = m.padStart(2, '0');
+              dateStr = `${y}-${month}-${day}`;
+              startTime = '00:00';
+              endTime = '23:59';
+              console.log('Formatted monthly date:', dateStr);
+            } catch (error: any) {
+              console.error('Error formatting monthly date:', error);
+              console.error('Date parts:', dateParts);
+              Alert.alert('Lỗi', 'Lỗi định dạng ngày tháng: ' + error.message);
+              setLoading(false);
+              return;
+            }
           } else {
+            console.error('Invalid monthly date parts:', dateParts);
             Alert.alert('Lỗi', 'Ngày bắt đầu vé tháng không hợp lệ.');
             setLoading(false);
             return;
           }
         } else {
+          console.error('Invalid monthly date format:', monthlyStartDate);
           Alert.alert('Lỗi', 'Ngày bắt đầu vé tháng không hợp lệ.');
           setLoading(false);
           return;
         }
       }
+      
+      // Use the new multi-time slot API endpoint
+      const response = await api.post(`/bookings/zones/${zoneId}/time-slots`, {
+        date: dateStr,
+        timeSlots: [
+          {
+            startTime: startTime,
+            endTime: endTime
+          }
+        ]
+      });
+      
+      if (!response.success || !response.data) {
+        throw new Error(`Không thể lấy chi tiết khu vực ${zoneId}`);
+      }
+      
+      const zoneDetails = response.data as MultiTimeSlotResponse;
+      const totalPrice = priceInfo ? priceInfo.totalPrice : 0;
+      
       navigation.navigate('BarkingLayoutScreen', { 
         zoneId: zoneId.toString(),
-        totalSpots: zoneDetails.totalSpots,
-        availableSpots: zoneDetails.availableSpots,
-        zoneData: JSON.stringify(formattedSlots),
-        bookingDate: activeTab === 'daily' ? dailyBookingDate : monthlyStartDate,
+        totalSpots: zoneDetails.zone.totalSpots,
+        availableSpots: zoneDetails.zone.availableSpots,
+        zoneData: JSON.stringify(zoneDetails),
+        bookingDate: dateStr,
         startTime: startTime,
         endTime: endTime,
         duration: activeTab === 'daily' ? dailyDuration : '30 ngày',
         totalPrice: totalPrice,
-        pricePerHour: priceInfo ? priceInfo.pricePerUnit : 0,
-        priceId: priceInfo?.priceId // Truyền thêm priceId nếu cần
+        priceId: priceInfo?.priceId || 1
       });
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể tải thông tin chi tiết khu vực. Vui lòng thử lại sau.');
@@ -714,12 +806,8 @@ const BookingScreen: React.FC = () => {
   const handlePaymentNavigation = async (spotId: number, zoneId: string, spotCode?: string) => {
     try {
       setLoading(true);
-      console.log('====== CHUYỂN ĐẾN THANH TOÁN ======');
-      // Log dữ liệu đầu vào
-      console.log('Dữ liệu nhận vào:', { spotId, zoneId, spotCode });
-      console.log('Loại vé:', activeTab);
       
-      // Log dữ liệu gửi lên API tạo booking
+      // Chuẩn bị dữ liệu gửi lên API tạo booking
       const bookingPayload = {
         spotId: spotId,
         zoneId: zoneId,
@@ -737,10 +825,9 @@ const BookingScreen: React.FC = () => {
         licensePlate: licensePlate,
         phoneNumber: phoneNumber
       };
-      console.log('Booking payload gửi lên API:', bookingPayload);
+      
       // Tạo booking với API
       const response = await api.post('/bookings/create', bookingPayload);
-      console.log('Response từ API tạo booking:', response);
       
       if (!response.success) {
         throw new Error(response.message || 'Không thể tạo đặt chỗ');
@@ -752,8 +839,6 @@ const BookingScreen: React.FC = () => {
       const amount = bookingData.amount || (priceInfo ? priceInfo.totalPrice : 0);
       const qrCode = bookingData.qrCode || bookingData.bookingDetails?.qr_code || undefined;
       
-      console.log('Đã tạo booking thành công với ID:', bookingId);
-
       // Chuẩn bị dữ liệu cho màn hình thanh toán
       const paymentData = {
         bookingId,
@@ -772,12 +857,9 @@ const BookingScreen: React.FC = () => {
         qrCodeData: qrCode // truyền mã QR sang màn hình thanh toán
       };
       
-      console.log('Chuyển đến màn hình thanh toán với dữ liệu:', paymentData);
-      
       // Chuyển thẳng đến màn hình thanh toán
       navigation.navigate('PaymentScreen', paymentData);
-    } catch (error) {
-      console.error('Lỗi khi chuyển đến thanh toán:', error);
+    } catch (error: any) {
       Alert.alert('Lỗi', 'Không thể xử lý thanh toán. Vui lòng thử lại.');
     } finally {
       setLoading(false);
@@ -821,31 +903,20 @@ const BookingScreen: React.FC = () => {
       const currentUserId = userId || await loadUserIdFromStorage();
       
       if (!currentUserId) {
-        console.log('Không tìm thấy userId, không thể kiểm tra biển số');
         return {
           valid: false,
           message: 'Vui lòng đăng nhập lại để tiếp tục'
         };
       }
-
-      console.log('Đang kiểm tra biển số xe:', licensePlateDisplay);
-      console.log('Sử dụng userId:', currentUserId);
       
       // Format biển số cho API
       const formatted = formatLicensePlate(licensePlateDisplay);
       const licensePlateForApi = formatted.api;
       
-      console.log('Gửi yêu cầu kiểm tra biển số:', {
-        licensePlate: licensePlateForApi,
-        userId: currentUserId
-      });
-      
       const response = await api.post('/bookings/check-license-plate', {
         licensePlate: licensePlateForApi,
         userId: currentUserId
       });
-
-      console.log('Phản hồi API:', response);
 
       if (response.success) {
         const responseData = response.data as LicensePlateCheckResponse;
@@ -897,19 +968,31 @@ const BookingScreen: React.FC = () => {
     }
     
     try {
-      console.log('Bắt đầu xác nhận biển số xe:', licensePlate);
-      console.log('Sử dụng userId:', userId);
       setLoading(true);
       
       // Gọi hàm kiểm tra biển số với userId cụ thể
       const result = await checkLicensePlate(licensePlate);
-      console.log('Kết quả kiểm tra biển số:', result);
       
       if (result.valid) {
         // Xác nhận biển số hợp lệ
-        console.log('Biển số xe hợp lệ');
         setIsLicensePlateConfirmed(true);
-        saveUserInputToStorage();
+        
+        // Đảm bảo lưu dưới cả hai key
+        await AsyncStorage.setItem('booking_license_plate', licensePlate);
+        await AsyncStorage.setItem('license_plate', licensePlate);
+        await AsyncStorage.setItem('booking_license_plate_confirmed', 'true');
+        
+        // Kiểm tra xem đã lưu thành công chưa
+        const savedValue = await AsyncStorage.getItem('license_plate');
+        console.log('Biển số đã lưu:', savedValue);
+        
+        // Hiển thị tất cả các keys hiện có
+        const allKeys = await AsyncStorage.getAllKeys();
+        console.log('All AsyncStorage keys after license plate confirmation:', allKeys);
+        
+        // Sau đó mới gọi saveUserInputToStorage để lưu các thông tin khác
+        await saveUserInputToStorage();
+        
         Alert.alert('Thành công', 'Biển số xe đã xác nhận thành công');
       } else {
         // Hiển thị thông báo lỗi với animation

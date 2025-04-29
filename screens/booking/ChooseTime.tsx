@@ -7,10 +7,11 @@ import { RootStackParamList } from '../../Navigation/types';
 
 // Định nghĩa các khung giờ cố định
 const TIME_SLOTS = [
-  { id: 'morning', name: 'Buổi sáng', startTime: '06:00', endTime: '12:00', description: 'Đỗ xe buổi sáng (đi làm, mua sắm, sự kiện)' },
-  { id: 'afternoon', name: 'Buổi chiều', startTime: '12:00', endTime: '18:00', description: 'Đỗ xe buổi chiều (công việc, tan làm, sự kiện)' },
-  { id: 'evening', name: 'Buổi tối', startTime: '18:00', endTime: '00:00', description: 'Đỗ xe buổi tối (ăn uống, thăm bạn bè, giải trí)' },
-  { id: 'night', name: 'Qua đêm', startTime: '00:00', endTime: '06:00', description: 'Đỗ xe qua đêm (khuya đến sáng sớm)' },
+  { id: 'night', name: 'Buổi đêm', startTime: '00:00', endTime: '06:00', description: "  Đêm "},
+  { id: 'morning', name: 'Buổi sáng', startTime: '06:00', endTime: '12:00', description: 'Đỗ xe buổi sáng ' },
+  { id: 'afternoon', name: 'Buổi chiều', startTime: '12:00', endTime: '18:00', description: 'Đỗ xe buổi chiều ' },
+  { id: 'evening', name: 'Buổi tối', startTime: '18:00', endTime: '00:00', description: 'Đỗ xe buổi tối ' },
+ 
 ];
 
 const ChooseTime: React.FC = () => {
