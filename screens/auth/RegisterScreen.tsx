@@ -1,8 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ImageBackground, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { appColor } from '../../constants/appColors';
+import { Alert } from 'react-native';
+import api from '../../api/axiosConfig';
+
+// Định nghĩa kiểu dữ liệu cho response register
+interface RegisterResponse {
+  success: boolean;
+  message: string;
+  user?: {
+    user_id: number;
+    username: string;
+    full_name: string;
+    email: string;
+    phone: string;
+    role: string;
+  };
+}
 
 const RegisterScreen = () => {
   const navigation = useNavigation();
@@ -13,10 +29,97 @@ const RegisterScreen = () => {
     password: '',
     confirmPassword: '',
   });
+  const [loading, setLoading] = useState(false);
+
+  // Validate form data
+  const validateForm = () => {
+    if (!formData.fullName.trim() || formData.fullName.length < 6) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên (tối thiểu 6 ký tự)');
+      return false;
+    }
+    if (!formData.email.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email');
+      return false;
+    }
+    // Email validation regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      Alert.alert('Lỗi', 'Email không hợp lệ');
+      return false;
+    }
+    if (!formData.phone.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại');
+      return false;
+    }
+    if (formData.phone.trim().length !== 10 || !/^\d{10}$/.test(formData.phone.trim())) {
+      Alert.alert('Lỗi', 'Số điện thoại phải gồm đúng 10 chữ số');
+      return false;
+    }
+    if (formData.password.length < 6) {
+      Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
+      return false;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
+      return false;
+    }
+    return true;
+  };
+
+  // Handle registration
+  const handleRegister = async () => {
+    if (!validateForm()) return;
+    
+    setLoading(true);
+    
+    try {
+      // Thêm các trường mà server yêu cầu
+      const userData = {
+        name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        username: formData.email, // Có thể server yêu cầu username
+        role: "user" // Có thể server yêu cầu role
+      };
+      
+      console.log('Sending registration data:', userData);
+      
+      const registerData = await api.post<any, RegisterResponse>('/auth/register', userData);
+      
+      console.log('Registration response:', registerData);
+      
+      if (registerData && registerData.success) {
+        Alert.alert(
+          'Thành công', 
+          registerData.message || 'Đăng ký tài khoản thành công!', 
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } else {
+        Alert.alert('Lỗi', registerData.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      
+      if (error.message.includes('Không thể kết nối đến máy chủ')) {
+        Alert.alert(
+          'Lỗi kết nối',
+          'Không thể kết nối đến máy chủ. Vui lòng kiểm tra:\n\n' +
+          '1. Máy chủ đã được khởi động\n' +
+          '2. Địa chỉ IP và cổng chính xác\n' +
+          '3. Kết nối mạng của bạn'
+        );
+      } else {
+        Alert.alert('Lỗi đăng ký', error.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <ImageBackground
-      source={require('../../assets/images/logo1.png')}
+      source={require('../../assets/images/nen.jpg')}
       style={styles.background}
     >
       <TouchableOpacity 
@@ -83,8 +186,16 @@ const RegisterScreen = () => {
           />
         </View>
 
-        <TouchableOpacity style={styles.registerButton}>
-          <Text style={styles.registerButtonText}>Đăng ký</Text>
+        <TouchableOpacity 
+          style={styles.registerButton}
+          onPress={handleRegister}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.registerButtonText}>Đăng ký</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.loginContainer}>

@@ -7,9 +7,64 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../Navigation/types';
 
 const ProfileScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  // Function to handle logout
+  const handleLogout = async () => {
+    try {
+      // Confirm logout
+      Alert.alert(
+        'Xác nhận đăng xuất',
+        'Bạn có chắc chắn muốn đăng xuất không?',
+        [
+          {
+            text: 'Hủy',
+            style: 'cancel'
+          },
+          {
+            text: 'Đăng xuất',
+            onPress: async () => {
+              // Clear all user-related data from AsyncStorage
+              const keysToRemove = [
+                'auth_token',
+                'user',
+                'userInfo',
+                'user_data',
+                'booking_license_plate',
+                'booking_license_plate_confirmed',
+                'booking_phone_number',
+                'booking_phone_number_confirmed',
+                'license_plate',
+                'phone_number'
+              ];
+              
+              await AsyncStorage.multiRemove(keysToRemove);
+              
+              console.log('User logged out successfully');
+              
+              // Navigate to LoginScreen screen with reset to prevent going back
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'LoginScreen' as keyof RootStackParamList }]
+              });
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error during logout:', error);
+      Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -88,7 +143,10 @@ const ProfileScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
         
-        <TouchableOpacity style={styles.logoutButton}>
+        <TouchableOpacity 
+          style={styles.logoutButton}
+          onPress={handleLogout}
+        >
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
         

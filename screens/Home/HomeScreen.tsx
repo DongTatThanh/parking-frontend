@@ -9,40 +9,53 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../Navigation/types';
-
 
 const { width } = Dimensions.get('window');
 
 // Placeholder services data
 const serviceData = [
-  { id: '1', title: 'Sửa xe tận nơi', image: require('../../assets/images/gara-sua-chua-bao-duong-o-to-quan-1-1.jpg') },
-  { id: '2', title: 'Bảo dưỡng xe', image: require('../../assets/images/bao-duong-dinh-ky-dung-han-se-giup-xe-han-che-hu-hong-hoat-dong-on-dinh-nang-cao-tuoi-tho-dap-ung-tot-cac-quy-dinh-ve-an-toan-va-moi-truong.jpeg') },
-  { id: '3', title: 'Rửa xe', image: require('../../assets/images/oto.png') },
-  { id: '4', title: 'Cứu hộ xe', image: require('../../assets/images/oto.png') },
+  { id: '1', title: 'Sửa xe tận nơi', image: require('../../assets/images/a.jpg') },
+  { id: '2', title: 'Bảo dưỡng xe', image: require('../../assets/images/a.jpg') },
+  { id: '3', title: 'Rửa xe tại nhà', image: require('../../assets/images/a.jpg') },
+  { id: '4', title: 'Thay nhớt tận nơi', image: require('../../assets/images/a.jpg') },
   
 ];
 
 // Placeholder categories data
 const categoryData = [
-  { id: '1', title: 'Đặt Chỗ', image: require('../../assets/images/oto.png'), screen: 'BookingScreen' },
-  { id: '2', title: 'Thông Tin Chỗ Đặt', image: require('../../assets/images/oto.png'), screen:'BookingConfirmationScreen'},
-  { id: '3', title: 'Bảo Hiểm Xe', image: require('../../assets/images/oto.png'), screen: 'InsuranceScreen' },
-  { id: '4', title: 'Về chúng tôi', image: require('../../assets/images/oto.png'), screen: 'AboutScreen' },
-]; 
-const bookingData = [
-  {
-    spotId: "spot-123",
-    bookingCode: "BC-113" ,
-    userName: "Người dùng",
-    phone: "0123456789",
-    bookingTime: new Date().toISOString(),
-    ticketType: "Tiêu chuẩn",
-    expiryTime: new Date(Date.now() + 3600000).toISOString(),
-    totalAmount: 50000 
+  { 
+    id: '1', 
+    title: 'Đặt Chỗ trước ', 
+    image: require('../../assets/images/a.jpg'), 
+    screen: 'BookingScreen',
+ 
+  },
+  { 
+    id: '2', 
+    title: 'Thông Tin Đặt Chỗ', 
+    image: require('../../assets/images/a.jpg'), 
+    screen: 'BookingConfirmationScreen',
+   
+  },
+  { 
+    id: '3', 
+    title: 'Bảo Hiểm Xe', 
+    image: require('../../assets/images/a.jpg'), 
+    screen: 'InsuranceScreen',
+
+  },
+  { 
+    id: '4', 
+    title: 'Hỗ trợ và chăm sóc khách hàng', 
+    image: require('../../assets/images/oto.png'), 
+    screen: 'AboutScreen',
+
   },
 ]; 
 
@@ -73,35 +86,58 @@ type CategoryCardProps = {
   title: string;
   image: any;
   screen: keyof RootStackParamList;
+  description?: string;
 }
 
-const CategoryCard: React.FC<CategoryCardProps> = ({ title, image, screen }) => {
+const CategoryCard: React.FC<CategoryCardProps> = ({ title, image, screen, description }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   return (
     <TouchableOpacity 
       style={styles.categoryCard}
-      onPress={() => {
+      onPress={async () => {
         if (screen === 'BookingConfirmationScreen') {
-          navigation.navigate(screen, {
-            spotId: "spot-123",
-            bookingCode: "BC-113",
-            userName: "Người dùng",
-            phone: "0123456789",
-            bookingTime: new Date().toISOString(),
-            ticketType: "Tiêu chuẩn",
-            expiryTime: new Date(Date.now() + 3600000).toISOString(),
-            totalAmount: 50000
-          });
+          const bookingStr = await AsyncStorage.getItem('last_booking');
+          if (bookingStr) {
+            try {
+              const booking = JSON.parse(bookingStr);
+              // Kiểm tra nếu booking có đủ dữ liệu cần thiết
+              if (booking && booking.bookingId) {
+                navigation.navigate(screen, {
+                  bookingId: booking.bookingId || '',
+                  spotCode: booking.spotCode || '',
+                  zoneId: booking.zoneId || '',
+                  bookingDate: booking.bookingDate || '',
+                  startTime: booking.startTime || '',
+                  endTime: booking.endTime || '',
+                  duration: booking.duration || '',
+                  bookingType: booking.bookingType || '',
+                  totalPrice: booking.totalPrice || 0,
+                  licensePlate: booking.licensePlate || '',
+                  phoneNumber: booking.phoneNumber || '',
+                  userName: booking.userName || ''
+                });
+              } else {
+                Alert.alert('Thông báo', 'Dữ liệu đặt chỗ không hợp lệ!');
+              }
+            } catch (e) {
+              Alert.alert('Thông báo', 'Không thể đọc dữ liệu đặt chỗ!');
+            }
+          } else {
+            Alert.alert('Thông báo', 'Bạn chưa có đặt chỗ nào gần đây!');
+          }
         } else {
-          navigation.navigate(screen);
+          navigation.navigate(screen as any);
         }
       }}
     >
       <View style={styles.categoryIconContainer}>
         <Image source={image} style={styles.categoryIcon} resizeMode="contain" />
       </View>
-      <Text style={styles.categoryTitle}>{title}</Text>
+      <View style={styles.categoryTextContainer}>
+        <Text style={styles.categoryTitle}>{title}</Text>
+        {description && <Text style={styles.categoryDescription}>{description}</Text>}
+      </View>
     </TouchableOpacity>
   );
 };
@@ -189,6 +225,7 @@ const HomeScreen: React.FC = () => {
                 title={category.title}
                 image={category.image}
                 screen={category.screen as keyof RootStackParamList}
+                
               />
             ))}
           </View>
@@ -223,6 +260,10 @@ const styles = StyleSheet.create({
   heroSection: {
     height: 250,
     position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 8,
+    marginHorizontal: 8,
   },
   heroImage: {
     width: '100%',
@@ -291,7 +332,7 @@ const styles = StyleSheet.create({
   },
   serviceCard: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 20,
     width: width * 0.7,
     marginLeft: 16,
     overflow: 'hidden',
@@ -307,6 +348,8 @@ const styles = StyleSheet.create({
   imageContainer: {
     height: 160,
     overflow: 'hidden',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   serviceImage: {
     width: '100%',
@@ -327,11 +370,21 @@ const styles = StyleSheet.create({
     width: (width - 60) / 2,
     alignItems: 'center',
     marginBottom: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    minHeight: 130,
+    justifyContent: 'space-between',
   },
   categoryIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
@@ -344,16 +397,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
+    overflow: 'hidden',
   },
   categoryIcon: {
-    width: 30,
-    height: 30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  categoryTextContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginTop: 8,
   },
   categoryTitle: {
     fontSize: 14,
     textAlign: 'center',
     color: '#333',
     fontWeight: '500',
+  },
+  categoryDescription: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#666',
+    marginTop: 4,
   },
   promoBannerContainer: {
     paddingHorizontal: 16,

@@ -1,277 +1,107 @@
-import React from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  StatusBar,
-  Share,
-} from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../Navigation/types';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Image, ActivityIndicator, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import api from '../../api/axiosConfig';
+import { useRoute } from '@react-navigation/native';
 
-type BookingConfirmationScreenRouteProp = RouteProp<RootStackParamList, 'BookingConfirmationScreen'>;
+const BookingConfirmationScreen = () => {
+  const route = useRoute<any>();
+  const { bookingId, spotCode, zoneId, bookingDate, startTime, endTime, duration, bookingType, totalPrice, licensePlate, phoneNumber, userName } = route.params || {};
+  const [qrData, setQrData] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
-const BookingConfirmationScreen: React.FC = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute<BookingConfirmationScreenRouteProp>();
-  const { 
-    spotId, 
-    bookingCode,
-    userName,
-    phone,
-    bookingTime, 
-    ticketType,
-    expiryTime,
-    totalAmount
-  } = route.params;
-
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: `Thông tin đặt chỗ đỗ xe của tôi:
-Mã đặt chỗ: ${bookingCode}
-Vị trí: ${spotId}
-Hạn sử dụng: ${expiryTime}
-Cảm ơn bạn đã sử dụng dịch vụ TÌM BÃI NHANH!`,
-      });
-    } catch (error) {
-      console.log('Error sharing booking details');
-    }
-  };
+  useEffect(() => {
+    const fetchQr = async () => {
+      try {
+        if (!bookingId) {
+          setLoading(false);
+          return;
+        }
+        console.log('Fetching QR code for booking ID:', bookingId);
+        const res = await api.get(`/bookings/invoice/${bookingId}`);
+        console.log('QR code API response:', JSON.stringify(res.data));
+        
+        // Check for QR code in different possible locations in the response
+        const qrCode = res.data?.qrCode || res.data?.qrcode || 
+                       res.data?.data?.qrCode || res.data?.data?.qrcode ||
+                       res.data?.bookingDetails?.qr_code;
+                       
+        if (qrCode) {
+          // Check if it's already a data URI (base64)
+          if (qrCode.startsWith('data:image')) {
+            setQrData(qrCode);
+          } else {
+            // If it's just a code/identifier, it might need to be requested as an image
+            setQrData(`data:image/png;base64,${qrCode}`);
+          }
+        } else {
+          console.error('QR code not found in response:', res.data);
+          setQrData(null);
+        }
+      } catch (e) {
+        console.error('Error fetching QR code:', e);
+        setQrData(null);
+        Alert.alert('Lỗi', 'Không thể lấy mã QR. Hãy chắc chắn bạn đã thanh toán thành công!');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchQr();
+  }, [bookingId]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Xác nhận đặt chỗ</Text>
-        <Text style={styles.headerSubtitle}>Cảm ơn bạn đã sử dụng dịch vụ!</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Xác nhận đặt chỗ</Text>
+      <View style={styles.infoBox}>
+        <Text style={styles.label}>Mã đặt chỗ: <Text style={styles.value}>{bookingId}</Text></Text>
+        <Text style={styles.label}>Vị trí: <Text style={styles.value}>{spotCode}, Khu {zoneId}</Text></Text>
+        <Text style={styles.label}>Ngày đặt: <Text style={styles.value}>{bookingDate}</Text></Text>
+        <Text style={styles.label}>Thời gian: <Text style={styles.value}>{startTime} - {endTime}</Text></Text>
+        {duration && <Text style={styles.label}>Thời lượng: <Text style={styles.value}>{duration}</Text></Text>}
+        <Text style={styles.label}>Loại vé: <Text style={styles.value}>{bookingType === 'daily' ? 'Vé ngày' : 'Vé tháng'}</Text></Text>
+        <Text style={styles.label}>Tổng tiền: <Text style={styles.value}>{totalPrice?.toLocaleString()} VND</Text></Text>
+        {licensePlate && <Text style={styles.label}>Biển số xe: <Text style={styles.value}>{licensePlate}</Text></Text>}
+        {phoneNumber && <Text style={styles.label}>SĐT: <Text style={styles.value}>{phoneNumber}</Text></Text>}
+        {userName && <Text style={styles.label}>Tên KH: <Text style={styles.value}>{userName}</Text></Text>}
       </View>
-      
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          <View style={styles.bookingStatusContainer}>
-            <View style={styles.bookingStatusIcon}>
-              <Text style={styles.bookingStatusIconText}>✓</Text>
-            </View>
-            <Text style={styles.bookingStatusText}>Đặt chỗ thành công!</Text>
-            <Text style={styles.bookingCodeText}>Mã đặt chỗ: {bookingCode}</Text>
-          </View>
-          
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Thông tin khách hàng</Text>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Họ và tên:</Text>
-              <Text style={styles.infoValue}>{userName}</Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Số điện thoại:</Text>
-              <Text style={styles.infoValue}>{phone}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Chi tiết đặt chỗ</Text>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Vị trí đỗ xe:</Text>
-              <Text style={styles.infoValue}>{spotId}</Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Thời gian đặt:</Text>
-              <Text style={styles.infoValue}>{bookingTime}</Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Loại vé:</Text>
-              <Text style={styles.infoValue}>{ticketType}</Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Hạn sử dụng:</Text>
-              <Text style={styles.infoValue}>{expiryTime}</Text>
-            </View>
-            
-            <View style={styles.divider} />
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.totalLabel}>Tổng thanh toán:</Text>
-              <Text style={styles.totalValue}>{totalAmount.toLocaleString()} VND</Text>
-            </View>
-          </View>
-          
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Hướng dẫn</Text>
-            <Text style={styles.instructionsText}>
-              • Vui lòng đến đúng giờ để đảm bảo chỗ đỗ xe của bạn.{'\n'}
-              • Xuất trình mã QR tại barie vào bãi đỗ xe.{'\n'}
-              • Liên hệ hotline 1900-1234 nếu cần hỗ trợ.
-            </Text>
-          </View>
-          
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity 
-              style={styles.shareButton}
-              onPress={handleShare}
-            >
-              <Text style={styles.shareButtonText}>Chia sẻ thông tin đặt chỗ</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.homeButton}
-              onPress={() => navigation.navigate('HomeScreen')}
-            >
-              <Text style={styles.homeButtonText}>Về trang chủ</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <Text style={styles.qrTitle}>Mã QR Check-in/Check-out</Text>
+      {loading ? (
+        <ActivityIndicator size="large" color="#3b82f6" />
+      ) : qrData ? (
+        <Image source={{ uri: qrData }} style={styles.qrImage} resizeMode="contain" />
+      ) : (
+        <Text style={styles.qrError}>Không thể tải mã QR. Vui lòng kiểm tra trạng thái thanh toán!</Text>
+      )}
+    </ScrollView>
   );
 };
+
 const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: '#f8f9fa',
-    },
-    header: {
-      padding: 16,
-      paddingTop: 24,
-      backgroundColor: '#fff',
-      alignItems: 'center',
-      borderBottomWidth: 1,
-      borderBottomColor: '#eee',
-    },
-    headerTitle: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: '#333',
-      marginBottom: 4,
-    },
-    headerSubtitle: {
-      fontSize: 16,
-      color: '#666',
-    },
-    content: {
-      padding: 16,
-    },
-    bookingStatusContainer: {
-      alignItems: 'center',
-      marginBottom: 24,
-      marginTop: 8,
-    },
-    bookingStatusIcon: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: '#10b981',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    bookingStatusIconText: {
-      color: 'white',
-      fontSize: 32,
-      fontWeight: 'bold',
-    },
-    bookingStatusText: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: '#333',
-      marginBottom: 8,
-    },
-    bookingCodeText: {
-      fontSize: 16,
-      color: '#666',
-    },
-    infoCard: {
-      backgroundColor: '#fff',
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
-      elevation: 2,
-    },
-    infoCardTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      marginBottom: 16,
-      color: '#333',
-    },
-    infoRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-    },
-    infoLabel: {
-      fontSize: 15,
-      color: '#555',
-    },
-    infoValue: {
-      fontSize: 15,
-      fontWeight: '500',
-      color: '#333',
-      textAlign: 'right',
-    },
-    divider: {
-      height: 1,
-      backgroundColor: '#eee',
-      marginVertical: 12,
-    },
-    totalLabel: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#333',
-    },
-    totalValue: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: '#10b981',
-    },
-    instructionsText: {
-      fontSize: 14,
-      lineHeight: 22,
-      color: '#555',
-    },
-    actionsContainer: {
-      marginTop: 8,
-      marginBottom: 24,
-    },
-    shareButton: {
-      backgroundColor: '#f0f9ff',
-      borderWidth: 1,
-      borderColor: '#93c5fd',
-      borderRadius: 8,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginBottom: 12,
-    },
-    shareButtonText: {
-      color: '#3b82f6',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    homeButton: {
-      backgroundColor: '#000',
-      borderRadius: 8,
-      paddingVertical: 14,
-      alignItems: 'center',
-    },
-    homeButtonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-  });
-  
-  export default BookingConfirmationScreen;
+  container: { flexGrow: 1, padding: 24, backgroundColor: '#fff', alignItems: 'center' },
+  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
+  infoBox: { backgroundColor: '#f1f1f1', borderRadius: 12, padding: 16, marginBottom: 24, width: '100%' },
+  label: { fontSize: 16, color: '#333', marginBottom: 4 },
+  value: { fontWeight: 'bold', color: '#222' },
+  qrTitle: { fontSize: 20, fontWeight: '600', marginBottom: 12, color: '#333', textAlign: 'center' },
+  qrImage: { 
+    width: 220, 
+    height: 220, 
+    alignSelf: 'center', 
+    marginBottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#ddd'
+  },
+  qrError: { color: '#ef4444', fontSize: 15, textAlign: 'center', marginTop: 12 },
+  qrErrorContainer: { alignItems: 'center', padding: 16 },
+  retryButton: { 
+    backgroundColor: '#3b82f6', 
+    paddingVertical: 8, 
+    paddingHorizontal: 16, 
+    borderRadius: 8, 
+    marginTop: 12 
+  },
+  retryButtonText: { color: '#fff', fontWeight: 'bold' },
+});
+
+export default BookingConfirmationScreen;
