@@ -6,6 +6,8 @@ import { HomeScreen, LoginScreen } from '@/screens';
 import ServicesScreen from '@/screens/booking/ServicesScreen';
 import BookingScreen from '@/screens/booking/BookingScreen';
 import BarkingLayoutScreen from '@/screens/booking/BarkingLayoutScreen';
+import PaymentScreen from '@/screens/booking/PaymentScreen';
+import PaymentResultScreen from '@/screens/booking/PaymentResultScreen';
 
 import BookingConfirmationScreen from '@/screens/booking/BookingConfirmationScreen';
 import HistoryScreen from '@/screens/screenBottomTab/HistoryScreen';
@@ -13,8 +15,8 @@ import HistoryScreen from '@/screens/screenBottomTab/HistoryScreen';
 import InsuranceScreen from '@/screens/InsuranceScreen';
 import AboutScreen from '@/screens/AboutScreen';
 import SpecialOffersScreen from '@/screens/SpecialOffersScreen';
-import PaymentScreen from '@/screens/PaymentScreen';
 import ChooseTime from "../screens/booking/ChooseTime";
+import ResetPasswordScreen from '@/screens/auth/ResetPasword';
 
 const Stack = createStackNavigator();
 
@@ -44,9 +46,20 @@ const MainNavigator = () => {
           component={PaymentScreen} 
           options={{ title: "Thanh toán " }}
         />
+        <Stack.Screen 
+          name="PaymentResultScreen" 
+          component={PaymentResultScreen} 
+          options={{ title: "Kết quả thanh toán" }}
+        />
           <Stack.Screen name='ChooseTime' component={ChooseTime}
           options={{ title: "chọn thời gian" }}/>
+          <Stack.Screen name='ResetPassword' component={ResetPasswordScreen}
+          options={{ title: "Đặt lại mật khẩu" }}/>
+          <Stack.Screen name='LoginScreen' component={LoginScreen}
+          options={{ title: "Đăng nhập" }}/>
+          
     </Stack.Navigator>
+
   );
 };
 

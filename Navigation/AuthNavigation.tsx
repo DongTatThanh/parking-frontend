@@ -9,13 +9,14 @@ import ForgetPasswordScreen from '@/screens/auth/ForgetPasswordScreen';
 import RegisterScreen from '@/screens/auth/RegisterScreen';
 import BookingScreen from '@/screens/booking/BookingScreen';
 
-import PaymentScreen from '@/screens/PaymentScreen';
+import PaymentScreen from '@/screens/booking/PaymentScreen';
 import ServicesScreen from '@/screens/booking/ServicesScreen';
 import BarkingLayoutScreen from '@/screens/booking/BarkingLayoutScreen';
 import BookingConfirmationScreen from '@/screens/booking/BookingConfirmationScreen';
 import SpecialOffersScreen from '@/screens/SpecialOffersScreen';
 import ChooseTime from "../screens/booking/ChooseTime"
 ;
+import ResetPasswordScreen from '@/screens/auth/ResetPasword';
 
 const Stack = createStackNavigator();
 
@@ -66,7 +67,9 @@ const AuthNavigation = () => {
      />
      <Stack.Screen name='ChooseTime' component={ChooseTime}/>
     
-    
+  
+     <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+     <Stack.Screen name="ForgetPassword" component={ForgetPasswordScreen} />
     </Stack.Navigator>
   );
 };
